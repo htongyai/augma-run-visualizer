@@ -1,0 +1,1762 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Augma Run Visualizer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="vendor/starkui/tokens.css">
+<link rel="preload" href="data/parks.geojson" as="fetch" crossorigin>
+<link rel="preload" href="data/features.geojson" as="fetch" crossorigin>
+<link rel="preload" href="data/roads.geojson" as="fetch" crossorigin>
+<link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js">
+<link rel="icon" href="assets/augma-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500&family=Share+Tech+Mono&display=swap">
+<style>
+/* Stark UI 26 (tokens from /Users/htongyai/starkui/css/tokens.css, vendored in vendor/starkui/) */
+html,body{margin:0;height:100%;overflow:hidden;background:var(--void)}
+#hud{position:absolute;left:var(--sp-4);top:var(--sp-4);z-index:var(--z-hud);width:340px;max-width:calc(100vw - 2 * var(--sp-3));box-sizing:border-box;padding:var(--sp-3) var(--sp-4);
+  background:rgba(3,4,5,.72);border:var(--stroke) solid var(--line);font:var(--fs-body)/1.7 var(--font-data);
+  color:var(--txt);letter-spacing:var(--track-body);text-transform:uppercase;backdrop-filter:blur(4px)}
+#hud::before,#hud::after{content:"";position:absolute;width:10px;height:10px;border:var(--stroke) solid var(--hair)}
+#hud::before{top:-1px;right:-1px;border-left:0;border-bottom:0}
+#hud::after{bottom:-1px;left:-1px;border-right:0;border-top:0}
+#hud .logo{display:block;width:72px;height:auto;margin:0 0 var(--sp-2)}
+#hud .title{font:500 var(--fs-title)/1.1 var(--font-display);color:var(--hi);letter-spacing:.12em}
+#hud .title small{display:block;font:var(--fs-cap) var(--font-data);color:var(--dim);letter-spacing:var(--track-wide);margin-top:var(--sp-1)}
+#hud .title small b{color:var(--red);font-weight:400}
+#hud .hline{height:var(--stroke);background:var(--line-faint);margin:var(--sp-2) 0}
+#hud dl{display:grid;grid-template-columns:1fr auto 1fr auto;gap:0 var(--sp-3);margin:0}
+#hud dt{color:var(--mute)} #hud dd{margin:0;color:var(--hi);text-align:right}
+#hud .cap{font-size:var(--fs-cap);color:var(--dim);letter-spacing:var(--track-wide);margin-top:var(--sp-2)}
+#hud .btn{position:relative;background:none;border:var(--stroke) solid var(--line);color:var(--hi);font:var(--fs-body) var(--font-data);
+  letter-spacing:var(--track-wide);padding:var(--sp-1) var(--sp-3);cursor:pointer;pointer-events:auto}
+#hud .btn:hover{border-color:var(--hair)} #hud .btn.on{border-bottom:var(--stroke-em) solid var(--red)}
+#hud .btn:disabled{color:var(--dim)} #hud .btn:focus-visible{outline:var(--stroke) solid var(--blue);outline-offset:2px}
+#hud summary{cursor:pointer;list-style:none;margin:var(--sp-2) 0;padding-top:var(--sp-2);border-top:var(--stroke) solid var(--line-faint);
+  color:var(--mute);letter-spacing:var(--track-wide);font-size:var(--fs-cap)}
+#hud summary::-webkit-details-marker{display:none}
+#hud summary::after{content:" ▸";color:var(--red)} #hud details[open] summary::after{content:" ▾"}
+#hud summary:focus-visible{outline:var(--stroke) solid var(--blue);outline-offset:2px}
+#hud .sun{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-2);color:var(--mute);font-size:var(--fs-cap);pointer-events:auto}
+#hud .sun input{flex:1;min-width:0;accent-color:var(--red)} #hud .sun span{color:var(--hi);white-space:nowrap}
+/* Stark field overlay (from /Users/htongyai/starkui/css/kit.css .field + glyphs), fixed over the 3D view. */
+#field{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cpath d='M36 32v8M32 36h8' stroke='%23c8d6e2' stroke-opacity='.35'/%3E%3C/svg%3E") -36px -36px,
+    linear-gradient(rgba(160,180,200,.045) 1px,transparent 1px) 0 0/var(--grid-size) var(--grid-size),
+    linear-gradient(90deg,rgba(160,180,200,.045) 1px,transparent 1px) 0 0/var(--grid-size) var(--grid-size)}
+#field .g{position:absolute}
+#field .xb{width:28px;height:28px;border:1px solid var(--hair);display:grid;place-items:center;color:var(--hi);font:var(--fs-glyph) var(--font-data);background:rgba(200,214,226,.05)}
+#field .xb::before{content:"";position:absolute;top:3px;left:50%;width:6px;height:1px;background:var(--hi);transform:translateX(-50%)}
+#field .xb.tail::after{content:"";position:absolute;left:34px;top:50%;width:90px;border-top:2px dotted var(--hair)}
+#field .sq{width:56px;height:56px;border:1px solid var(--line)}
+#field .pip{width:7px;height:7px;border:1px solid var(--hair)}
+#field .ret{width:12px;height:12px;border:1px solid var(--hair);border-radius:50%}
+#field .ro{font:var(--fs-label)/2.1 var(--font-data);letter-spacing:var(--track-wide);color:var(--txt);text-transform:uppercase;white-space:nowrap}
+#field .ro b{color:var(--hi);font-weight:400} #field .ro i{color:var(--blue);font-style:normal}
+#field .plus{width:14px;height:14px;border:1px solid var(--hair);display:grid;place-items:center;color:var(--hi);font:10px var(--font-data)}
+@media (max-width:900px){#field .side{display:none}}
+/* HUD minimise: collapses to logo + title strip. */
+#hud .hudmin{position:absolute;top:6px;right:6px;z-index:2;width:22px;height:22px;padding:0;background:none;border:var(--stroke) solid var(--line);
+  color:var(--hi);font:14px/1 var(--font-data);cursor:pointer;pointer-events:auto}
+#hud .hudmin:hover{border-color:var(--hair)} #hud .hudmin:focus-visible{outline:var(--stroke) solid var(--blue);outline-offset:2px}
+#hud.min{width:auto;padding:var(--sp-2) 40px var(--sp-2) var(--sp-3)}
+#hud.min > :not(.logo):not(.title):not(.hudmin):not(.holoFx){display:none}
+#hud.min .logo{float:left;width:26px;margin:0 var(--sp-2) 0 0}
+#hud.min .title{font-size:14px;line-height:26px;white-space:nowrap} #hud.min .title small{display:none}
+#splash{position:fixed;inset:0;z-index:100;background:#000 radial-gradient(60% 50% at 50% 45%,rgba(30,52,86,.35),transparent 70%);
+  display:grid;place-items:center;transition:opacity .7s ease;font-family:var(--font-data);color:var(--txt)}
+#splash.out{opacity:0;pointer-events:none}
+#splash .sp-in{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(360px,80vw)}
+#splash img{width:120px;height:auto;margin-bottom:8px;animation:spPulse 2.4s ease-in-out infinite}
+@keyframes spPulse{50%{filter:drop-shadow(0 0 14px rgba(200,16,46,.55))}}
+#splash .sp-t{font:500 20px/1 var(--font-display);letter-spacing:.18em;color:var(--hi)}
+#splash .sp-s{font-size:var(--fs-cap);letter-spacing:var(--track-wide);color:var(--dim)}
+#splash .sp-bar{width:100%;height:2px;background:var(--line-faint);margin-top:18px;position:relative}
+#splash .sp-bar b{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--red);transition:width .4s ease;box-shadow:0 0 8px var(--red)}
+#splash .sp-m{width:100%;display:flex;justify-content:space-between;font-size:var(--fs-cap);letter-spacing:var(--track-wide);color:var(--mute)}
+#splash .sp-cap{position:absolute;left:24px;bottom:20px;font-size:var(--fs-cap);letter-spacing:var(--track-wide);color:var(--dim)}
+@media (prefers-reduced-motion:reduce){#splash img{animation:none}#splash{transition:none}}
+#hud .parks{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:var(--sp-2);pointer-events:auto}
+#hud .pk-l{font-size:var(--fs-cap);color:var(--mute);margin-right:4px}
+#hud .pk{background:none;border:var(--stroke) solid var(--line-faint);color:var(--txt);font:9px var(--font-data);letter-spacing:var(--track-wide);padding:3px 7px;cursor:pointer}
+#hud .pk:hover:not(:disabled){border-color:var(--hair);color:var(--hi)}
+#hud .pk.on{color:var(--hi);border-color:var(--line);box-shadow:inset 0 -2px 0 var(--red)}
+#hud .pk.soon{color:var(--mute-d);border-style:dashed;cursor:not-allowed}
+#hud .pk:focus-visible{outline:var(--stroke) solid var(--blue);outline-offset:2px}
+/* Hologram UI: faint scanlines + soft cyan text glow + slow edge shimmer on panels. */
+#hud,.rs-box{text-shadow:0 0 4px rgba(90,169,220,.15)}
+#hud > *, .rs-box > *{position:relative;z-index:1}
+#hud .holoFx,.rs-box .holoFx{position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,rgba(127,212,255,.035) 0 1px,transparent 1px 3px);
+  box-shadow:inset 0 0 14px rgba(90,169,220,.04);animation:holoShimmer 4s ease-in-out infinite}
+@keyframes holoShimmer{50%{box-shadow:inset 0 0 18px rgba(90,169,220,.07)}}
+@media (prefers-reduced-motion:reduce){#hud .holoFx,.rs-box .holoFx{animation:none}}
+@media (max-width:600px){
+  /* Phone: HUD becomes a compact top bar — small logo beside the title, one-row toolbar, inventory folded. */
+  #hud{left:8px;right:8px;top:8px;width:auto;padding:8px 10px}
+  #hud .logo{float:left;width:30px;height:auto;margin:0 8px 0 0}
+  #hud .title{font-size:14px} #hud .title small{display:none}
+  #hud summary{margin:4px 0;padding-top:4px}
+  #hud .cap{display:none}
+  #hud .hline{margin:4px 0}
+  #hud .btn{padding:3px 8px;font-size:9px}
+  #hud .sun{margin-top:4px}
+  #hud dl{grid-template-columns:1fr auto 1fr auto;font-size:9px}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="splash" role="status" aria-live="polite" aria-label="Loading Augma Run Visualizer">
+  <div class="sp-in">
+    <img src="assets/augma-logo.png" alt="Augma Imaginarium" width="120">
+    <div class="sp-t">AUGMA RUN VISUALIZER</div>
+    <div class="sp-s">LUMPHINI ↔ BENJAKITTI · DIGITAL TWIN</div>
+    <div class="sp-bar"><b id="spBar"></b></div>
+    <div class="sp-m"><span id="spMsg">INITIALISING</span><span id="spPct">0%</span></div>
+  </div>
+  <span class="sp-cap">FIG. 00 — BOOT SEQUENCE</span>
+</div>
+<script>
+  // Splash progress (plain script so it runs before the heavy module): listens to 'boot' events.
+  addEventListener('boot', e => {
+    const { p, msg } = e.detail;
+    document.getElementById('spBar').style.width = (p * 100).toFixed(0) + '%';
+    document.getElementById('spMsg').textContent = msg;
+    document.getElementById('spPct').textContent = Math.round(p * 100) + '%';
+    if (p >= 1) setTimeout(() => { const s = document.getElementById('splash'); s.classList.add('out'); setTimeout(() => s.remove(), 700); dispatchEvent(new Event('splash:done')); }, 450);
+  });
+</script>
+<div id="field" aria-hidden="true">
+  <!-- glyphs sit on 72 px grid intersections (left/top = n*72 - half the glyph) -->
+  <div class="g plus side" style="right:calc(72px * 6 - 7px);top:calc(72px - 7px)">+</div>
+  <div class="g ro side" style="right:calc(72px * 2 + 8px);top:52px">TABLE <b>›</b><br>BAR - LOAD<br><i>▷</i> <span id="fSun">--</span><br><span id="fFps">--</span> FPS</div>
+  <div class="g ro side" style="right:24px;top:52px;text-align:right"><b>LOCK</b><br>13.730 N<br>100.550 E<br><i>▷</i></div>
+  <div class="g ro side" id="fFile" style="right:24px;top:calc(72px * 3 - 4px);text-align:right"><b>FILE ›</b><br><span data-f="name">NO FILE</span><br><span data-f="fmt">LOAD RUN TO READ</span><br><span data-f="pts"></span><br><span data-f="when"></span><br><span data-f="dist"></span><br><i data-f="match"></i></div>
+  <div class="g xb side" style="right:calc(72px * 7 - 14px);top:calc(72px * 6 - 14px)">×</div>
+  <div class="g sq side" style="right:calc(72px * 4 - 28px);top:calc(72px * 9 - 28px)"></div>
+  <div class="g xb tail side" style="left:calc(72px * 6 - 14px);top:calc(72px * 10 - 14px)">×</div>
+  <div class="g ret side" style="left:calc(72px * 8 - 6px);top:calc(72px * 10 - 6px)"></div>
+  <div class="g pip" style="right:calc(72px * 3 - 3px);top:calc(72px * 11 - 3px)"></div>
+  <div class="g pip" style="right:calc(72px * 3 - 3px);top:calc(72px * 11 + 12px)"></div>
+  <div class="g pip side" style="left:calc(72px * 12 - 3px);top:calc(72px * 4 - 3px)"></div>
+</div>
+<div id="hud" role="region" aria-label="Augma Run Visualizer — scene summary">
+  <button id="hudMin" class="hudmin" aria-expanded="true" aria-controls="hud" title="Minimise panel">–</button>
+  <img class="logo" src="assets/augma-logo.png" width="72" alt="Augma Imaginarium">
+  <div class="title">AUGMA RUN VISUALIZER<small><b>●</b> LUMPHINI ↔ BENJAKITTI · DIGITAL TWIN · SYSTEM ONLINE</small></div>
+  <details id="inv">
+    <summary>SCENE INVENTORY</summary>
+    <dl id="info"></dl>
+  </details>
+  <div class="hline"></div>
+  <button id="sat" class="btn" aria-pressed="false">GROUND: MAP</button>
+  <button id="holo" class="btn" aria-pressed="false">VIEW: REAL</button>
+  <button id="tour" class="btn" title="What can I do here?">? TOUR</button>
+  <button id="settingsBtn" class="btn" aria-expanded="false" aria-controls="settings" title="Quality & display settings">⚙ SETTINGS</button>
+  <div class="parks" role="radiogroup" aria-label="Park">
+    <span class="pk-l">PARK</span>
+    <button class="pk on" role="radio" aria-checked="true" data-park="BOTH">BOTH</button>
+    <button class="pk" role="radio" aria-checked="false" data-park="LUMPHINI">LUMPHINI</button>
+    <button class="pk" role="radio" aria-checked="false" data-park="BENJAKITTI">BENJAKITTI</button>
+    <button class="pk soon" disabled title="Coming soon">CHATUCHAK · SOON</button>
+    <button class="pk soon" disabled title="Coming soon">BENJASIRI · SOON</button>
+  </div>
+  <label class="sun">SUN <input id="sunR" type="range" min="330" max="1110" step="5" aria-label="Sun time of day (05:30–18:30)"> <span id="sunT">--:--</span></label>
+  <div class="cap">FIG. 01 — SCENE INVENTORY · © OPENSTREETMAP CONTRIBUTORS · IMAGERY © ESRI, MAXAR, EARTHSTAR GEOGRAPHICS · BENJAKITTI PLAN © TURENSCAPE + ARSOMSILP · DRAG ORBIT / SCROLL ZOOM / RIGHT-DRAG PAN</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+await document.fonts.load('36px "Share Tech Mono"').catch(() => {});
+
+// Heights (m) for elevated structures — estimates, refine from photos.
+const ELEV = { green_mile: 6, skywalk: 5 };
+// Heights missing from OSM (metres). Towers: Wikipedia "List of tallest buildings in Bangkok" / CTBUH; podiums are estimates.
+const HEIGHT_OVERRIDE = {
+  1264152501: 243, // One Bangkok Tower 3
+  1264152498: 241, // One Bangkok Tower 4
+  1264152506: 241, // One Bangkok Tower 2
+  1354933660: 30,  // The Storeys (low-rise retail)
+  1264152505: 25,  // Post 1928
+  1264152504: 30,  // Forum
+};
+const WIDTH = { green_mile: 5, skywalk: 3, path: 1.6 };
+const COLOR = { park: 0x7cb36b, water: 0x4a90c8, green_mile: 0xe0702a, skywalk: 0x9a5cc6, path: 0xd8cfb8,
+  building: 0xe8e2d4, wall: 0x9c8f80, landmark: 0xc0392b, pitch: 0x8fbf6a, concrete: 0xc9c6bf, toilet: 0x3a7bd5, road: 0x4a4a4f, flyover: 0x8a8a90 };
+
+// Local tangent-plane projection: x east, z south, metres.
+const ORIGIN = [100.5500, 13.7300];
+const mLat = 110574, mLon = 111320 * Math.cos(ORIGIN[1] * Math.PI / 180);
+const proj = ([lon, lat]) => [(lon - ORIGIN[0]) * mLon, -(lat - ORIGIN[1]) * mLat];
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+const MOBILE = matchMedia('(max-width: 600px), (pointer: coarse)').matches;
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.25 : 1.5)); // retina at 2x costs ~1.8x fill for little visible gain
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+// User preferences (one JSON blob in localStorage; every access guarded for private mode / blocked storage).
+const prefs = (() => {
+  let P = {}; try { P = JSON.parse(localStorage.getItem('prefs') || '{}'); } catch {}
+  return { get: (k, d) => (k in P ? P[k] : d), set: (k, v) => { P[k] = v; try { localStorage.setItem('prefs', JSON.stringify(P)); } catch {} } };
+})();
+const boot = (p, msg) => dispatchEvent(new CustomEvent('boot', { detail: { p, msg } }));
+const labelled = new Set(); // label texts already placed (avoid duplicate signs)
+const allLabels = [];       // every label sprite, for near-camera fading
+// Category icons for "mark" labels (run markers & landmarks): drawn centred at (0,0) in a ±14 px box.
+const ICONS = {
+  start: c => { c.beginPath(); c.moveTo(-7, -11); c.lineTo(11, 0); c.lineTo(-7, 11); c.closePath(); c.fill(); },
+  finish: c => { c.fillRect(-10, -12, 2.5, 25); for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2 === 0) c.fillRect(-7 + i * 4.5, -12 + j * 4.5, 4.5, 4.5); c.strokeRect(-7, -12, 18, 13.5); },
+  km: c => { c.fillRect(-9, -12, 2.5, 25); c.beginPath(); c.moveTo(-6.5, -12); c.lineTo(10, -6); c.lineTo(-6.5, 0); c.closePath(); c.fill(); },
+  statue: c => { c.beginPath(); c.arc(0, -8, 4.5, 0, 7); c.fill(); c.fillRect(-4, -3, 8, 10); c.fillRect(-7, 8, 14, 3.5); },
+  sculpture: c => { c.beginPath(); c.moveTo(0, -12); c.lineTo(10, 0); c.lineTo(0, 12); c.lineTo(-10, 0); c.closePath(); c.stroke(); c.beginPath(); c.arc(0, 0, 3, 0, 7); c.fill(); },
+  shrine: c => { c.beginPath(); c.moveTo(-12, -1); c.lineTo(0, -12); c.lineTo(12, -1); c.closePath(); c.fill(); c.fillRect(-7, 0, 14, 7); c.fillRect(-1.5, 7, 3, 5); },
+  gate: c => { c.lineWidth = 3; c.beginPath(); c.moveTo(-9, 12); c.lineTo(-9, -2); c.arc(0, -2, 9, Math.PI, 0); c.lineTo(9, 12); c.stroke(); },
+  fountain: c => { c.beginPath(); c.moveTo(0, -12); c.bezierCurveTo(8, -1, 9, 3, 0, 11); c.bezierCurveTo(-9, 3, -8, -1, 0, -12); c.fill(); },
+  station: c => { c.font = '700 22px Rajdhani, sans-serif'; c.textAlign = 'center'; c.fillText('M', 0, 8); },
+  pin: c => { c.beginPath(); c.arc(0, -4, 7.5, Math.PI, 0); c.lineTo(0, 12); c.closePath(); c.fill(); c.fillStyle = '#05080b'; c.beginPath(); c.arc(0, -4, 3, 0, 7); c.fill(); },
+};
+const holoLabels = [];
+const leaderMat = new THREE.LineBasicMaterial({ color: 0xe4ebf1, transparent: true, opacity: 0.65, depthTest: false, fog: false });
+const ringDash = new THREE.LineDashedMaterial({ color: 0xf2d27a, dashSize: 1.2, gapSize: 0.8, transparent: true, opacity: 0.9, depthTest: false, fog: false });
+const ringPts = new THREE.EllipseCurve(0, 0, 5, 5).getPoints(48).map(p => new THREE.Vector3(p.x, 0, p.y));
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.Fog(0x000000, 3000, 7000);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 2, 20000);
+// Default overview; portrait / narrow screens pull back so both parks still fit horizontally.
+const VIEW_TARGET = new THREE.Vector3(-80, 0, 150), VIEW_OFFSET = new THREE.Vector3(0, 1500, 1450);
+const defaultCamPos = () => VIEW_TARGET.clone().add(VIEW_OFFSET.clone().multiplyScalar(Math.max(1, 1.45 / (innerWidth / innerHeight))));
+camera.position.copy(defaultCamPos());
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(-80, 0, 150);
+controls.maxPolarAngle = Math.PI / 2.1;
+controls.maxDistance = 6500; // room for the pulled-back portrait default view
+controls.enableDamping = true;
+Object.assign(window, { camera, controls }); // for console tweaking
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x556644, 1.2);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(-800, 1200, 600);
+sun.castShadow = true;
+Object.assign(sun.shadow.camera, { left: -1500, right: 1500, top: 1500, bottom: -1500, far: 4000 });
+sun.shadow.mapSize.setScalar(MOBILE ? 2048 : 4096);
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.5;
+scene.add(sun);
+
+
+const mat = k => new THREE.MeshLambertMaterial({ color: COLOR[k], side: THREE.DoubleSide });
+const shapeOf = rings => {
+  const s = new THREE.Shape(rings[0].map(c => new THREE.Vector2(...proj(c))));
+  s.holes = rings.slice(1).map(r => new THREE.Path(r.map(c => new THREE.Vector2(...proj(c)))));
+  return s;
+};
+
+// Solid prism from polygon rings: top at `top`, `depth` metres tall. Shape XY -> world XZ (z = south).
+function prism(rings, top, depth, material) {
+  const geo = new THREE.ExtrudeGeometry(shapeOf(rings), { depth, bevelEnabled: false });
+  geo.rotateX(Math.PI / 2);
+  const m = new THREE.Mesh(geo, material);
+  m.position.y = top;
+  m.castShadow = m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+
+function polygon(rings, y, kind, material = mat(kind)) {
+  const geo = new THREE.ShapeGeometry(shapeOf(rings));
+  geo.rotateX(Math.PI / 2);
+  const m = new THREE.Mesh(geo, material);
+  m.position.y = y;
+  m.receiveShadow = true;
+  scene.add(m);
+}
+
+// Strip along a polyline: flat ribbon, or a vertical wall when `height` is set.
+function ribbon(pts, width, y, kind, height = 0, material = mat(kind)) {
+  const pos = [], uv = [], idx = [];
+  let dist = 0;
+  pts.forEach((p, i) => {
+    const a = pts[Math.max(i - 1, 0)], b = pts[Math.min(i + 1, pts.length - 1)];
+    const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+    const nx = -dz / l * width / 2, nz = dx / l * width / 2;
+    if (i) dist += Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]);
+    const yi = Array.isArray(y) ? y[i] : y;
+    if (height) pos.push(p[0], yi, p[1], p[0], yi + height, p[1]);
+    else pos.push(p[0] + nx, yi, p[1] + nz, p[0] - nx, yi, p[1] - nz);
+    uv.push(0, dist, 1, dist);
+    if (i) idx.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material);
+  m.castShadow = m.receiveShadow = true;
+  scene.add(m);
+}
+
+// Procedural canvas textures (no downloads). `draw(ctx, w, h)` paints one tile.
+function canvasTexture(w, h, draw, repeatX = 1, repeatY = 1) {
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeatX, repeatY);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+const noise = (ctx, w, h, base, spread, n = w * h / 6) => {
+  ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < n; i++) {
+    const v = (Math.random() - 0.5) * spread;
+    ctx.fillStyle = `rgba(${v > 0 ? '255,255,255' : '0,0,0'},${Math.abs(v)})`;
+    ctx.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5);
+  }
+};
+
+// Road: one tile = full width x 12 m (6 m dash + 6 m gap). UV v is metres along the road.
+const roadTex = canvasTexture(128, 256, (c, w, h) => {
+  noise(c, w, h, '#45464b', 0.25);
+  c.fillStyle = '#e8e4d8';
+  c.fillRect(4, 0, 3, h); c.fillRect(w - 7, 0, 3, h);   // edge lines
+  c.fillStyle = '#f2f2f2';
+  c.fillRect(w / 2 - 2, 0, 4, h / 2);                    // centre dash
+}, 1, 1 / 12);
+// Black void ground with a faint dot every 20 m.
+const dotTex = canvasTexture(64, 64, (c, w, h) => {
+  c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+  c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(w / 2, h / 2, 2, 0, 7); c.fill();
+}, 400, 400);
+const voidGround = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshBasicMaterial({ map: dotTex, fog: false }));
+voidGround.rotation.x = -Math.PI / 2;
+voidGround.position.y = -3.5;
+scene.add(voidGround);
+
+const roadMat = new THREE.MeshLambertMaterial({ map: roadTex, side: THREE.DoubleSide });
+const onewayMat = new THREE.MeshLambertMaterial({ map: canvasTexture(128, 256, (c, w, h) => {
+  noise(c, w, h, '#45464b', 0.25);
+  c.fillStyle = '#e8e4d8'; c.fillRect(4, 0, 3, h); c.fillRect(w - 7, 0, 3, h);
+}, 1, 1 / 12), side: THREE.DoubleSide });
+const serviceMat = new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => noise(c, w, h, '#55565a', 0.2), 1, 1 / 8), side: THREE.DoubleSide });
+const flyoverMat = new THREE.MeshLambertMaterial({ map: roadTex, color: 0xdddddd, side: THREE.DoubleSide });
+
+// Facades: ExtrudeGeometry side UVs are in metres, so repeat = 1 / (bay width, floor height).
+const FACADES = [['#d9d4c7', '#5d7488'], ['#c9ccd1', '#3f5f7a'], ['#e6dfd2', '#6c7a84'], ['#b9c3c9', '#2f4a63']];
+const facadeMats = FACADES.map(([wall, glass]) => new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+  noise(c, w, h, wall, 0.12, 300);
+  c.fillStyle = glass;
+  c.fillRect(8, 14, w - 16, h - 26);                      // window
+  c.fillStyle = 'rgba(255,255,255,0.25)';
+  c.fillRect(8, 14, (w - 16) / 3, h - 26);                // glint
+}, 1 / 4, 1 / 3.5) }));
+const towerMat = new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+  c.fillStyle = '#6f8ea8'; c.fillRect(0, 0, w, h);        // curtain wall
+  c.fillStyle = '#c8d4dc'; c.fillRect(0, 0, 3, h); c.fillRect(0, 0, w, 4);
+}, 1 / 3, 1 / 4) });
+const roofMat = new THREE.MeshLambertMaterial({ map: canvasTexture(128, 128, (c, w, h) => noise(c, w, h, '#a9a69f', 0.2), 1 / 20, 1 / 20) });
+const buildingMats = (id, h) => BUILDING_STYLE[id]?.mats ?? [roofMat, h > 80 ? towerMat : facadeMats[id % FACADES.length]];
+
+// One Bangkok signature buildings (sources: KPF / onebangkok.com — Tower 4 vertical projecting fins + light
+// shelves, Tower 3 curved "sail" glass, Post 1928 retail with glass canopy). Facade tiles are 1 bay x 1 floor.
+const facade = (draw, bay, floor) => new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, draw, 1 / bay, 1 / floor) });
+const greenRoof = new THREE.MeshLambertMaterial({ map: canvasTexture(128, 128, (c, w, h) => {
+  noise(c, w, h, '#6f9a52', 0.35);
+  c.fillStyle = 'rgba(210,205,190,0.9)'; for (let i = 0; i < 6; i++) c.fillRect(0, i * 22, w, 3);   // terrace walks
+}, 1 / 30, 1 / 30) });
+const BUILDING_STYLE = {
+  1264152498: { crown: 14, mats: [roofMat, facade((c, w, h) => {          // Tower 4: dark glass, white fins, light shelf
+    c.fillStyle = '#28414f'; c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(160,200,215,0.35)'; c.fillRect(0, 0, w, h * 0.45);
+    c.fillStyle = '#e8ecee'; c.fillRect(0, 0, 9, h); c.fillRect(0, h - 6, w, 6);
+  }, 1.6, 4.2)] },
+  1264152501: { crown: 10, mats: [roofMat, facade((c, w, h) => {          // Tower 3: pale silver ribbon glazing
+    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#a9c2cf'); gr.addColorStop(1, '#6f8ea0');
+    c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#dfe6ea'; c.fillRect(0, h - 10, w, 10);
+  }, 3, 4.2)] },
+  1264152506: { crown: 8, mats: [roofMat, facade((c, w, h) => {           // Tower 2: blue-grey grid curtain wall
+    c.fillStyle = '#4d6b80'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#c9d3da'; c.fillRect(0, 0, 4, h); c.fillRect(0, 0, w, 4);
+  }, 2.4, 4)] },
+  1264152505: { mats: [new THREE.MeshLambertMaterial({ color: 0xbfd7e2, transparent: true, opacity: 0.85 }), facade((c, w, h) => { // Post 1928: stone + glass shopfronts
+    c.fillStyle = '#d8cbb3'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#3d5566'; c.fillRect(6, h * 0.35, w - 12, h * 0.55);
+  }, 6, 6)] },
+  1354933660: { mats: [greenRoof, facade((c, w, h) => {                    // The Storeys: terraced low-rise, planted ledges
+    c.fillStyle = '#e3ddd0'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#4a6170'; c.fillRect(0, 12, w, h - 30);
+    c.fillStyle = '#5f8a45'; c.fillRect(0, 0, w, 10);
+  }, 5, 5)] },
+  1264152504: { mats: [roofMat, facade((c, w, h) => {                      // Forum: pale stone, tall glazing
+    c.fillStyle = '#d6d0c3'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#56707f'; c.fillRect(10, 6, w - 20, h - 12);
+  }, 4, 7)] },
+};
+
+const pillarGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+const pillarMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+function pillars(pts, y, spacing = 25) {
+  let next = 0, dist = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [a, b] = [pts[i - 1], pts[i]], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (; next <= dist + d; next += spacing) {
+      const t = (next - dist) / d, p = new THREE.Mesh(pillarGeo, pillarMat);
+      p.scale.y = y;
+      p.position.set(a[0] + (b[0] - a[0]) * t, y / 2, a[1] + (b[1] - a[1]) * t);
+      p.castShadow = true;
+      scene.add(p);
+    }
+    dist += d;
+  }
+}
+
+const inside = ([x, y], ring) => {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+};
+const centroid = ring => ring.map(proj).reduce((a, q) => [a[0] + q[0] / ring.length, a[1] + q[1] / ring.length], [0, 0]);
+const area = ring => Math.abs(ring.reduce((s, c, i) => {
+  const [x1, z1] = proj(c), [x2, z2] = proj(ring[(i + 1) % ring.length]);
+  return s + x1 * z2 - x2 * z1;
+}, 0) / 2);
+
+boot(0.15, 'LOADING OSM DATA');
+const [g, fx] = await Promise.all(['parks', 'features'].map(n =>
+  fetch(`data/${n}.geojson`).then(r => r.ok ? r.json() : { features: [] })));
+const parks = g.features.filter(f => f.properties.kind === 'park');
+// Dog parks count as park ground too (Benjakitti's sits just outside the park outline but has its own ponds/paths/trees).
+const parkRings = [...parks, ...fx.features.filter(f => f.properties.kind === 'dog_park' && f.geometry.type === 'Polygon')]
+  .map(f => f.geometry.coordinates[0]);
+const inPark = c => parkRings.some(r => inside(c, r));
+const polys = kind => [...g.features, ...fx.features].filter(f => f.properties.kind === kind && f.geometry.type === 'Polygon');
+
+// Lakes: dedupe by first vertex (water is in both files), keep those inside a park.
+const seen = new Set();
+const lakes = polys('water').map(f => f.geometry.coordinates).filter(r => {
+  const key = r[0][0].join();
+  if (seen.has(key) || !inPark(r[0][0]) && !inPark(r[0][Math.floor(r[0].length / 2)])) return false;
+  seen.add(key);
+  return true;
+});
+const inLake = c => lakes.some(r => inside(c, r[0]) && !r.slice(1).some(h => inside(c, h)));
+
+// Parks are 3 m slabs with lakes cut out as holes; water sits 0.8 m below the lawn.
+const SLAB = 3, WATER_Y = -0.8;
+const soil = [mat('park'), new THREE.MeshLambertMaterial({ color: 0x6b5236 })];
+for (const ring of parkRings) {
+  const holes = lakes.filter(l => inside(l[0][0], ring)).map(l => l[0]);
+  prism([ring, ...holes], 0, SLAB, soil);
+}
+lakes.forEach(r => polygon(r, WATER_Y, 'water'));
+// Lake islands are paved plazas.
+lakes.forEach(r => r.slice(1).forEach(island => prism([island], 0.03, SLAB, [mat('concrete'), soil[1]])));
+
+// Concrete city ground filling the space between the parks (convex hull of parks + Green Mile), lakes cut out.
+const unproj = (x, z) => [x / mLon + ORIGIN[0], -z / mLat + ORIGIN[1]];
+function hull(points) {
+  const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = list => list.reduce((h, q) => {
+    while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop();
+    h.push(q);
+    return h;
+  }, []);
+  const lower = half(p), upper = half(p.reverse());
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+const bridgeCoords = g.features.filter(f => f.properties.kind === 'green_mile' && !f.geometry.coordinates.some(c => c[1] > 13.7350)).flatMap(f => f.geometry.coordinates);
+const qsncc = fx.features.filter(f => f.properties.tag === 'amenity=conference_centre' && f.geometry.type === 'Polygon').flatMap(f => f.geometry.coordinates[0]);
+// Axis-aligned rectangle around parks, bridge and QSNCC with a margin for the perimeter roads.
+const MARGIN = 150, ext = hull([...parkRings.flat(), ...bridgeCoords, ...qsncc]).map(proj);
+const [xs, zs] = [ext.map(p => p[0]), ext.map(p => p[1])];
+const [x0, x1, z0, z1] = [Math.min(...xs) - MARGIN, Math.max(...xs) + MARGIN, Math.min(...zs) - MARGIN, Math.max(...zs) + MARGIN];
+const R = 150, corners = [[x1 - R, z1 - R, 0], [x0 + R, z1 - R, 1], [x0 + R, z0 + R, 2], [x1 - R, z0 + R, 3]];
+const cityRing = corners.flatMap(([cx, cz, q]) => Array.from({ length: 9 }, (_, i) => {
+  const a = (q + i / 8) * Math.PI / 2;
+  return unproj(cx + R * Math.cos(a), cz + R * Math.sin(a));
+}));
+cityRing.push(cityRing[0]);
+
+// Edge fade: fog depth = signed distance (m) to the rounded base edge, so everything fades to black
+// over the last FADE metres instead of with camera distance.
+const FADE = 150, f1 = v => v.toFixed(1);
+THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float vFogDepth;\n#endif';
+THREE.ShaderChunk.fog_vertex = `#ifdef USE_FOG
+  // World position from mvPosition (present in every built-in vertex shader, incl. sprites/points/instancing).
+  vec4 fogWorld = inverse(viewMatrix) * mvPosition;
+  vec2 fogQ = abs(fogWorld.xz - vec2(${f1((x0 + x1) / 2)}, ${f1((z0 + z1) / 2)})) - vec2(${f1((x1 - x0) / 2 - R)}, ${f1((z1 - z0) / 2 - R)});
+  vFogDepth = length(max(fogQ, 0.0)) + min(max(fogQ.x, fogQ.y), 0.0) - ${f1(R)};
+#endif`;
+scene.fog = new THREE.Fog(0x000000, -FADE, 0);
+prism([cityRing, ...lakes.map(l => l[0])], -0.6, SLAB - 0.6, [mat('concrete'), soil[1]]);
+
+let counts = { path: 0, green_mile: 0, skywalk: 0, building: 0, wall: 0, landmark: 0, tree: 0 };
+let longest = null;
+const elevatedEnds = [];
+// Walkable network for run map-matching: polylines in local metres with per-vertex deck height.
+const network = [];
+const deckPts = g.features.filter(f => ELEV[f.properties.kind] && f.properties.bridge && f.properties.highway !== 'steps').flatMap(f => f.geometry.coordinates.map(proj));
+for (const f of g.features) {
+  const { kind } = f.properties;
+  if (kind === 'park' || kind === 'water') continue;
+  const coords = f.geometry.coordinates;
+  if (kind === 'path' && coords.filter(inPark).length < coords.length / 2) continue; // drop city sidewalks
+  if (kind === 'green_mile' && coords.some(c => c[1] > 13.7350)) continue; // bridge only, not its northern street continuation
+  const pts = coords.map(proj);
+  const { bridge, highway } = f.properties;
+  if (ELEV[kind] && bridge && highway === 'steps') {
+    // Stairs: slope from the deck (end nearest an elevated vertex) down to the ground.
+    const d = q => Math.min(...deckPts.map(v => Math.hypot(v[0] - q[0], v[1] - q[1])));
+    const hiFirst = d(pts[0]) <= d(pts.at(-1));
+    const ys = pts.map((_, i) => ELEV[kind] * (hiFirst ? 1 - i / (pts.length - 1) : i / (pts.length - 1)) + 0.15);
+    ribbon(pts, 2.5, ys, kind);
+    network.push({ kind: 'steps', pts, ys });
+    counts[kind]++;
+    continue;
+  }
+  // Only OSM bridge/viaduct pieces are raised; untagged Green Mile pieces are street-level cycle lanes.
+  const elevated = ELEV[kind] && bridge;
+  const y = elevated ? ELEV[kind] : 0.15;
+  ribbon(pts, WIDTH[kind], y, kind);
+  network.push({ kind: elevated ? kind : 'path', pts, ys: pts.map(() => y + 0.0) });
+  if (elevated) {
+    pillars(pts, y);
+    for (const [end, prev] of [[0, 1], [pts.length - 1, pts.length - 2]]) elevatedEnds.push({ kind, y, end: pts[end], prev: pts[prev] });
+  }
+  if (kind === 'green_mile' && (!longest || pts.length > longest.length)) longest = pts;
+  counts[kind]++;
+}
+
+// Ramps down to the lawn at elevated ends that don't join another elevated piece (1:8 slope).
+const endKey = p => `${Math.round(p[0])},${Math.round(p[1])}`;
+const endCount = new Map();
+const stairEnds = new Set(g.features.filter(f => f.properties.highway === 'steps' && f.properties.bridge && ELEV[f.properties.kind])
+  .flatMap(f => [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)].map(c => endKey(proj(c)))));
+for (const e of elevatedEnds) endCount.set(endKey(e.end), (endCount.get(endKey(e.end)) || 0) + 1);
+for (const { kind, y, end, prev } of elevatedEnds) {
+  if (endCount.get(endKey(end)) > 1 || stairEnds.has(endKey(end))) continue;
+  const dx = end[0] - prev[0], dz = end[1] - prev[1], l = Math.hypot(dx, dz) || 1, len = y * 8;
+  const foot = [end[0] + dx / l * len, end[1] + dz / l * len];
+  ribbon([end, foot], WIDTH[kind], [y, 0.15], kind);
+  network.push({ kind: 'ramp', pts: [end, foot], ys: [y, 0.15] });
+}
+
+// City roads on the concrete; bridges/flyovers raised 6 m per OSM layer.
+const ROAD_W = { motorway: 16, trunk: 14, primary: 12, secondary: 9, tertiary: 7, residential: 5, unclassified: 5, service: 3.5 };
+const ROAD_RANK = { service: 0, unclassified: 1, residential: 1, tertiary: 2, secondary: 3, primary: 4, trunk: 5, motorway: 6 };
+// Split a lon/lat polyline into runs of consecutive vertices that lie on the concrete base.
+const clipRuns = coords => {
+  const runs = [[]];
+  for (const c of coords) inside(c, cityRing) ? runs.at(-1).push(proj(c)) : runs.push([]);
+  return runs.filter(r => r.length > 1);
+};
+boot(0.4, 'BUILDING PARKS & PATHS');
+const roads = await fetch('data/roads.geojson').then(r => r.ok ? r.json() : { features: [] });
+for (const f of roads.features) {
+  const { highway, bridge, layer } = f.properties, coords = f.geometry.coordinates;
+  const base = highway.replace('_link', ''), link = highway.endsWith('_link');
+  const lanes = f.properties.lanes, oneway = f.properties.oneway;
+  // Width from lanes when mapped; one-way halves of dual carriageways are ~half a road.
+  const w = lanes ? lanes * 3.3 : (ROAD_W[base] ?? 4) * (oneway || link ? 0.55 : 1);
+  const material = base === 'service' ? serviceMat : oneway || link ? onewayMat : roadMat;
+  // Major roads sit slightly higher so they win where carriageways overlap at junctions.
+  const y = -0.55 + (ROAD_RANK[base] ?? 0) * 0.015;
+  for (const pts of clipRuns(coords)) {
+    if (bridge) {
+      const by = 6 * Math.max(1, layer || 1);
+      ribbon(pts, w, by, 'flyover', 0, flyoverMat);
+      pillars(pts, by, 30);
+    } else ribbon(pts, w, y, 'road', 0, material);
+    counts.road = (counts.road || 0) + 1;
+  }
+}
+
+// Buildings, walls, landmarks.
+const labels = [];
+for (const f of fx.features) {
+  const { kind, name, tag } = f.properties, geom = f.geometry;
+  const height = HEIGHT_OVERRIDE[f.properties.osm_id] ?? f.properties.height;
+  const first = geom.type === 'Point' ? geom.coordinates : geom.type === 'Polygon' ? geom.coordinates[0][0] : geom.coordinates[0];
+  const onCity = kind === 'building' ? geom.type === 'Polygon' && geom.coordinates[0].every(c => inside(c, cityRing))
+    : kind === 'wall' && geom.type !== 'Point' && (geom.type === 'Polygon' ? geom.coordinates[0] : geom.coordinates).every(c => inside(c, cityRing));
+  if (!inPark(first) && !onCity) continue;
+  if (kind === 'building' && geom.type === 'Polygon') {
+    const h = height || (inPark(first) ? 6 : 15);
+    prism(geom.coordinates, h, h, buildingMats(f.properties.osm_id, h));
+    const crown = BUILDING_STYLE[f.properties.osm_id]?.crown;
+    if (crown) {
+      // Stepped crown: footprint shrunk 12% toward its centroid, same facade.
+      const ring = geom.coordinates[0].map(proj), [cx, cz] = ring.reduce((a, q) => [a[0] + q[0] / ring.length, a[1] + q[1] / ring.length], [0, 0]);
+      prism([ring.map(([x, z]) => unproj(cx + (x - cx) * 0.88, cz + (z - cz) * 0.88))], h + crown, crown, buildingMats(f.properties.osm_id, h));
+    }
+    if ((tag === 'amenity=conference_centre' || tag === 'tourism=museum') && name) {
+      const c = proj(first);
+      labels.push(label(name, c[0], h + 12, c[1]));
+    }
+  } else if (kind === 'wall' && geom.type !== 'Point') {
+    const ring = geom.type === 'Polygon' ? geom.coordinates[0] : geom.coordinates;
+    ribbon(ring.map(proj), 0, 0, 'wall', tag === 'barrier=fence' ? 1.5 : 2.2);
+  } else if (tag === 'amenity=toilets') {
+    const c = proj(first), box = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 4), mat('toilet'));
+    box.position.set(c[0], 1.5, c[1]);
+    box.castShadow = true;
+    scene.add(box);
+    label('WC', c[0], 7, c[1], 0.5);
+    counts.toilet = (counts.toilet || 0) + 1;
+    continue;
+  } else if (kind === 'landmark' && name && /^(tourism|historic)/.test(tag)) {
+    const pts = geom.type === 'Point' ? [first] : geom.type === 'Polygon' ? geom.coordinates[0] : geom.coordinates;
+    const c = pts.map(proj).reduce((s, p) => [s[0] + p[0] / pts.length, s[1] + p[1] / pts.length], [0, 0]);
+    if (geom.type === 'Polygon' && tag?.startsWith('leisure')) polygon(geom.coordinates, 0.08, 'pitch');
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 10, 8), mat('landmark'));
+    post.position.set(c[0], 5, c[1]);
+    scene.add(post);
+    labels.push(label(name, c[0], 14, c[1], 1, { icon: /artwork/.test(tag) ? 'sculpture' : /memorial|historic/.test(tag) ? 'statue' : 'pin' }));
+  } else continue;
+  counts[kind]++;
+}
+
+// Holo-mode label: plate-less glowing white type with a hexagon glyph, a leader line to the ground and a
+// dashed target ring at its foot (shown instead of the plate label while VIEW: HOLO is on).
+function holoLabel(text, x, y, z, size, plate, icon) {
+  const cv = document.createElement('canvas'), c = cv.getContext('2d'), font = '600 44px Rajdhani, "Share Tech Mono", sans-serif';
+  c.font = font;
+  cv.width = Math.ceil(c.measureText(text).width + 120); cv.height = 84;
+  c.font = font; c.shadowColor = '#7fd4ff'; c.shadowBlur = 6;
+  c.strokeStyle = '#ffffff'; c.lineWidth = 3;                          // hexagon glyph (or the category icon)
+  c.beginPath();
+  for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k + Math.PI / 6; c.lineTo(38 + 22 * Math.cos(a), 42 + 22 * Math.sin(a)); }
+  c.closePath(); c.stroke();
+  c.fillStyle = '#ffffff';
+  if (icon && ICONS[icon]) { c.save(); c.translate(38, 42); c.lineWidth = 2; ICONS[icon](c); c.restore(); }
+  else { c.beginPath(); c.arc(38, 42, 6, 0, 7); c.fill(); }
+  c.fillStyle = '#ffffff'; c.fillText(text, 76, 58);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, depthWrite: false, fog: false }));
+  sp.scale.set(cv.width / 6 * size, cv.height / 6 * size, 1);
+  sp.center.set(76 / cv.width, 0.5);                                   // anchor on the glyph so the leader meets it
+  sp.position.set(x, y + 4, z); sp.renderOrder = 10; sp.visible = false; sp.material.transparent = true;
+  const leader = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, y + 4, z), new THREE.Vector3(x, 0.4, z)]), leaderMat);
+  const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ringPts), ringDash);
+  ring.computeLineDistances(); ring.position.set(x, 0.4, z);
+  leader.visible = ring.visible = false; leader.renderOrder = ring.renderOrder = 9;
+  scene.add(sp, leader, ring);
+  return { plate, sp, leader, ring };
+}
+function label(text, x, y, z, size = 1, opts = {}) {
+  if (labelled.has(text)) return null;
+  labelled.add(text);
+  const cv = document.createElement('canvas'), ctx = cv.getContext('2d'), font = '36px "Share Tech Mono", system-ui';
+  const t = text.toUpperCase();
+  ctx.font = font;
+  if (opts.icon && ICONS[opts.icon]) {
+    // "Mark" label: round icon badge + floating text, no plate.
+    const accent = opts.color || '#c8102e';
+    cv.width = ctx.measureText(t).width + 92; cv.height = 72;
+    ctx.fillStyle = 'rgba(3,4,5,0.85)'; ctx.beginPath(); ctx.arc(36, 36, 30, 0, 7); ctx.fill();
+    ctx.strokeStyle = accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(36, 36, 30, 0, 7); ctx.stroke();
+    ctx.save(); ctx.translate(36, 36); ctx.scale(1.25, 1.25); ctx.fillStyle = ctx.strokeStyle = '#e4ebf1'; ctx.lineWidth = 2; ICONS[opts.icon](ctx); ctx.restore();
+    ctx.font = font; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(3,4,5,0.9)'; ctx.strokeText(t, 78, 48);   // halo for legibility
+    ctx.fillStyle = '#e4ebf1'; ctx.fillText(t, 78, 48);
+  } else {
+    // Stark UI plate label: near-black plate, hairline frame, mono uppercase, crimson index tick.
+    cv.width = ctx.measureText(t).width + 56; cv.height = 60;
+    ctx.fillStyle = 'rgba(3,4,5,0.82)'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = 'rgba(200,214,226,0.5)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, cv.width - 2, cv.height - 2);
+    ctx.fillStyle = '#c8102e'; ctx.fillRect(14, 26, 8, 8);
+    ctx.font = font; ctx.fillStyle = '#e4ebf1'; ctx.fillText(t, 36, 42);
+  }
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthWrite: false, depthTest: false, fog: false }));
+  s.scale.set(cv.width / 6 * size, cv.height / 6 * size, 1);
+  s.position.set(x, y, z);
+  s.renderOrder = 10; // labels draw over buildings instead of being clipped by them
+  s.material.transparent = true;
+  allLabels.push(s);
+  scene.add(s);
+  if (y < 100) {
+    const L = holoLabel(t, x, y, z, size, s, opts.icon);   // sky labels (sun arc) get no ground leader
+    holoLabels.push(L);
+    s.userData.twin = L;
+  }
+  return s;
+}
+
+// Land use filling the city blocks, and dog parks (fenced lawns).
+const LANDUSE = {
+  'amenity=parking': 0x56575c, 'landuse=construction': 0x9a8064, 'landuse=brownfield': 0x9a8a70,
+  'landuse=grass': 0x7cb36b, 'leisure=garden': 0x7cb36b, 'leisure=pitch': 0x6fae5a, 'leisure=golf_course': 0x86c06e,
+  'landuse=recreation_ground': 0x7cb36b, 'leisure=sports_centre': 0xb8b0a0, 'leisure=track': 0xb5654a,
+  'landuse=commercial': 0xc4bfb6, 'landuse=retail': 0xc7bdb2, 'landuse=residential': 0xbdb8ae,
+  'landuse=religious': 0xcbb89a, 'landuse=railway': 0x8d8478, 'landuse=institutional': 0xbcb7ab,
+};
+// Car parks OSM maps only as flat lots but which are multi-storey buildings (height in m, estimated).
+// Benjakitti "ลานจอดรถ A" (300 cars) is a surface lot — confirmed on Esri imagery and the BMA listing — so none here.
+const PARKING_BUILDINGS = {};
+const parkingMat = new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+  noise(c, w, h, '#bfbab0', 0.12, 300);
+  c.fillStyle = '#2b2c30'; c.fillRect(0, 14, w, h - 30);                       // open deck gap
+  c.fillStyle = '#9d978b'; c.fillRect(0, 14, 4, h - 30); c.fillRect(w / 2, 14, 4, h - 30); // columns
+}, 1 / 8, 1 / 3) });
+// Surface car park: asphalt with white bay lines (bay 2.5 m x 5 m, 6 m aisle). Shape UVs are metres.
+const parkingLotMat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: canvasTexture(64, 128, (c, w, h) => {
+  noise(c, w, h, '#4f5055', 0.2);
+  c.fillStyle = '#e8e4d8';
+  c.fillRect(0, 0, 2, h * 0.31); c.fillRect(0, h * 0.69, 2, h * 0.31);                 // bay separators (two rows)
+  c.fillRect(0, h * 0.31, w, 2); c.fillRect(0, h * 0.69 - 2, w, 2);                    // bay ends at the aisle
+}, 1 / 2.5, 1 / 16) });
+const dogRings = [];
+const fenceMat = new THREE.MeshLambertMaterial({ color: 0x3d3d3d, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+for (const f of fx.features) {
+  const { kind, tag, name } = f.properties, geom = f.geometry;
+  if (geom.type !== 'Polygon' || !inside(geom.coordinates[0][0], cityRing)) continue;
+  if (kind === 'dog_park') {
+    // Inside a park the lawn, paths and ponds already exist, so only add the fence; in the city add a lawn.
+    const inP = inPark(geom.coordinates[0][0]), y = inP ? 0.15 : -0.5;
+    if (!inP) polygon(geom.coordinates, y, 'park', new THREE.MeshLambertMaterial({ color: 0x8cc06a, side: THREE.DoubleSide }));
+    dogRings.push(geom.coordinates[0]);
+    ribbon(geom.coordinates[0].map(proj), 0, y, 'wall', 1.5, fenceMat);
+    const [x, z] = centroid(geom.coordinates[0]);
+    label(name || 'Dog Park', x, y + 9, z);
+    counts.dogpark = (counts.dogpark || 0) + 1;
+  } else if (PARKING_BUILDINGS[f.properties.osm_id]) {
+    const h = PARKING_BUILDINGS[f.properties.osm_id];
+    prism(geom.coordinates, h, h, [roofMat, parkingMat]);
+    counts.building++;
+  } else if (tag === 'amenity=parking' && !inPark(geom.coordinates[0][0])) {
+    polygon(geom.coordinates, -0.575, 'landuse', parkingLotMat);                    // asphalt with painted bays
+  } else if (kind === 'landuse' && LANDUSE[tag] && !inPark(geom.coordinates[0][0])) {
+    // Smaller areas drawn last/higher so pitches sit on top of the larger land-use zones.
+    // Fixed layers by type (log depth buffer needs ≥1 cm gaps): zones < grounds < tracks < pitches < roads.
+    const y = tag === 'leisure=pitch' ? -0.56 : tag === 'leisure=track' ? -0.57 : tag.startsWith('leisure') ? -0.58 : -0.59;
+    polygon(geom.coordinates, y, 'landuse', new THREE.MeshLambertMaterial({ color: LANDUSE[tag], side: THREE.DoubleSide }));
+  }
+}
+
+// Wetlands, amphitheatres and transit (data/extra.geojson).
+boot(0.6, 'RAISING CITY BLOCKS');
+const extra = await fetch('data/extra.geojson').then(r => r.ok ? r.json() : { features: [] });
+const marshMat = new THREE.MeshLambertMaterial({ map: canvasTexture(128, 128, (c, w, h) => {
+  noise(c, w, h, '#5f7a3e', 0.3);
+  for (let i = 0; i < 14; i++) {                            // standing water pools
+    c.fillStyle = 'rgba(60,100,120,0.55)';
+    c.beginPath(); c.ellipse(Math.random() * w, Math.random() * h, 4 + Math.random() * 10, 3 + Math.random() * 6, Math.random() * 3, 0, 7); c.fill();
+  }
+}, 1 / 25, 1 / 25), side: THREE.DoubleSide });
+const wetRings = [];
+const seatMat = new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+  noise(c, w, h, '#cfc8b8', 0.15, 300);
+  c.fillStyle = '#a9a191'; c.fillRect(0, 0, w, 6);          // step edge
+}, 1 / 4, 1 / 4) });
+const kioskMat = new THREE.MeshLambertMaterial({ color: 0x1f4e9c });
+const viaductMat = new THREE.MeshLambertMaterial({ color: 0xbdbdbd, side: THREE.DoubleSide });
+const rails = extra.features.filter(f => f.properties.kind === 'rail');
+const nearElevatedRail = c => rails.some(f => f.properties.bridge && f.geometry.coordinates.some(q => Math.hypot((q[0] - c[0]) * mLon, (q[1] - c[1]) * mLat) < 80));
+
+for (const f of extra.features) {
+  const { kind, name } = f.properties, geom = f.geometry;
+  const first = geom.type === 'Point' ? geom.coordinates : geom.type === 'Polygon' ? geom.coordinates[0][0] : geom.coordinates[0];
+  if (kind === 'wetland' && geom.type === 'Polygon' && inPark(first)) {
+    polygon(geom.coordinates, 0.05, 'water', marshMat);
+    wetRings.push(geom.coordinates[0]);
+    if (name) { const [x, z] = centroid(geom.coordinates[0]); label(name, x, 10, z); }
+    counts.wetland = (counts.wetland || 0) + 1;
+  } else if (kind === 'amphitheatre' && geom.type === 'Polygon' && inside(first, cityRing)) {
+    // Concentric tiers shrinking toward the centroid; seats rise outward.
+    const ring = geom.coordinates[0].map(proj), [cx, cz] = ring.reduce((a, q) => [a[0] + q[0] / ring.length, a[1] + q[1] / ring.length], [0, 0]);
+    const TIERS = 6, toLL = k => ring.map(([x, z]) => unproj(cx + (x - cx) * k, cz + (z - cz) * k));
+    for (let i = 0; i < TIERS; i++) {
+      const outer = 1 - i * 0.1, inner = 1 - (i + 1) * 0.1;
+      prism([toLL(outer), toLL(inner).reverse()], (TIERS - i) * 0.5, (TIERS - i) * 0.5, [seatMat, seatMat]);
+    }
+    counts.amphitheatre = (counts.amphitheatre || 0) + 1;
+  } else if (kind === 'amphitheatre' && geom.type === 'Point' && name && inside(first, cityRing)) {
+    const [x, z] = proj(first);
+    label(name, x, 12, z);
+  } else if (kind === 'station' && geom.type === 'Point' && name && inside(first, cityRing)) {
+    const [x, z] = proj(first), bts = nearElevatedRail(first);
+    label(`${bts ? 'BTS' : 'MRT'} ${name}`, x, bts ? 30 : 18, z, 1.2, { icon: 'station', color: bts ? '#7cb342' : '#3a7bd5' });
+    counts.station = (counts.station || 0) + 1;
+  } else if (kind === 'entrance' && geom.type === 'Point' && inside(first, cityRing)) {
+    const [x, z] = proj(first), k = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 6), kioskMat);
+    k.position.set(x, 2, z);
+    k.castShadow = true;
+    scene.add(k);
+    label('M', x, 6.5, z, 0.45);
+  } else if (kind === 'rail' && f.properties.bridge) {
+    // Elevated BTS viaduct: deck at 12 m on pillars. Underground MRT tunnels are not drawn.
+    for (const pts of clipRuns(geom.coordinates)) {
+      ribbon(pts, 9, 12, 'rail', 0, viaductMat);
+      pillars(pts, 12, 30);
+    }
+  }
+}
+
+// Park furniture from OSM (data/furniture.geojson): one instanced mesh per model part.
+boot(0.72, 'PLACING LANDMARKS & TREES');
+const furniture = await fetch('data/furniture.geojson').then(r => r.ok ? r.json() : { features: [] });
+const lam = c => new THREE.MeshLambertMaterial({ color: c });
+const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const cyl = (r, h) => new THREE.CylinderGeometry(r, r, h, 8);
+// type -> parts: [geometry, material, x, y, z] in the object's local frame (y up, metres).
+const MODELS = {
+  bench:   [[box(1.8, 0.08, 0.5), lam(0x8b5a2b), 0, 0.45, 0], [box(1.8, 0.45, 0.06), lam(0x8b5a2b), 0, 0.75, -0.24],
+            [box(0.08, 0.45, 0.5), lam(0x333333), -0.8, 0.22, 0], [box(0.08, 0.45, 0.5), lam(0x333333), 0.8, 0.22, 0]],
+  stall:   [[box(3, 2.2, 2.2), lam(0xf2efe6), 0, 1.1, 0], [box(3.4, 0.12, 2.8), lam(0xe0702a), 0, 2.4, 0.3]],
+  water:   [[cyl(0.25, 1), lam(0xdfe6ea), 0, 0.5, 0], [cyl(0.3, 0.08), lam(0x3a7bd5), 0, 1.02, 0]],
+  bin:     [[cyl(0.3, 0.9), lam(0x2e7d32), 0, 0.45, 0]],
+  fitness: [[box(0.12, 2.2, 0.12), lam(0xf5a623), -1, 1.1, 0], [box(0.12, 2.2, 0.12), lam(0xf5a623), 1, 1.1, 0],
+            [box(2.1, 0.1, 0.1), lam(0xf5a623), 0, 2.1, 0], [box(1.2, 0.08, 0.4), lam(0x555555), 0, 0.5, 0.6]],
+  sign:    [[box(0.1, 1.6, 0.1), lam(0x555555), 0, 0.8, 0], [box(1.4, 0.9, 0.06), lam(0x1f6f4a), 0, 1.9, 0]],
+  lamp:    [[cyl(0.08, 5), lam(0x444444), 0, 2.5, 0], [box(0.6, 0.15, 0.3), lam(0xfff3c4), 0.25, 5, 0]],
+  bike:    [[box(2.5, 0.8, 0.08), lam(0x888888), 0, 0.4, 0]],
+  aid:     [[box(1.6, 2.4, 1.6), lam(0xffffff), 0, 1.2, 0], [box(1.62, 0.5, 0.2), lam(0xd32f2f), 0, 1.8, 0]],
+};
+{
+  const byType = {};
+  for (const f of furniture.features) {
+    const { type } = f.properties, c = f.geometry.coordinates;
+    if (MODELS[type] && inPark(c)) (byType[type] ??= []).push(proj(c));
+  }
+  const o = new THREE.Object3D(), part = new THREE.Object3D();
+  for (const [type, pts] of Object.entries(byType)) {
+    const yaws = pts.map(() => Math.random() * 6.28);
+    for (const [geo, material, px, py, pz] of MODELS[type]) {
+      const m = new THREE.InstancedMesh(geo, material, pts.length);
+      pts.forEach(([x, z], i) => {
+        o.position.set(x, 0, z); o.rotation.set(0, yaws[i], 0); o.updateMatrix();
+        part.position.set(px, py, pz); part.updateMatrix();
+        m.setMatrixAt(i, o.matrix.clone().multiply(part.matrix));
+      });
+      m.castShadow = true;
+      scene.add(m);
+    }
+    counts[type] = pts.length;
+  }
+}
+
+// Vegetation: OSM trees/tree rows, dense planting in woods & scrub, plus a sprinkle over lawns.
+// Positions avoid lakes, buildings and the paths' strips.
+const pathGrid = new Map(), CELL = 4;
+const cellKey = (x, z) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+for (const f of g.features) if (f.properties.kind === 'path') {
+  const p = f.geometry.coordinates.map(proj);
+  for (let i = 1; i < p.length; i++) {
+    const n = Math.ceil(Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) / 2);
+    for (let k = 0; k <= n; k++) pathGrid.set(cellKey(p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k / n, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k / n), 1);
+  }
+}
+// Perimeter wall around each park, open wherever a path crosses the boundary (gates).
+const wallMat = new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+  noise(c, w, h, '#d8d2c4', 0.15, 400);
+  c.fillStyle = '#b9b1a0'; c.fillRect(0, h - 10, w, 10); c.fillRect(0, 0, w, 5);   // plinth + coping
+  c.fillStyle = '#a49b88'; c.fillRect(0, 0, 3, h);                                  // pillar joint
+}, 1 / 3, 1 / 2), side: THREE.DoubleSide });
+for (const ring of parkRings) {
+  const p = ring.map(proj), samples = [];
+  for (let i = 1; i < p.length; i++) {
+    const n = Math.max(1, Math.ceil(Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) / 2));
+    for (let k = 0; k < n; k++) samples.push([p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k / n, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k / n]);
+  }
+  let run = [];
+  const flush = () => { if (run.length > 1) { ribbon(run, 0, 0, 'wall', 2, wallMat); counts.wall++; } run = []; };
+  for (const q of samples) pathGrid.has(cellKey(q[0], q[1])) ? flush() : run.push(q);
+  flush();
+}
+
+const buildingRings = polys('building').map(f => f.geometry.coordinates[0]);
+const free = (x, z) => {
+  const ll = unproj(x, z);
+  return !pathGrid.has(cellKey(x, z)) && inPark(ll) && !inLake(ll) && !buildingRings.some(r => inside(ll, r));
+};
+
+let seed = 7;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const trees = [], shrubs = [];
+const scatter = (ring, per100m2, list) => {
+  const p = ring.map(proj), xs = p.map(q => q[0]), zs = p.map(q => q[1]);
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+  const n = Math.round(area(ring) / 100 * per100m2);
+  for (let i = 0, tries = 0; i < n && tries < n * 4; tries++) {
+    const x = x0 + rand() * (x1 - x0), z = z0 + rand() * (z1 - z0);
+    if (inside(unproj(x, z), ring) && free(x, z)) { list.push([x, z]); i++; }
+  }
+};
+for (const f of fx.features) {
+  const { kind } = f.properties, geom = f.geometry;
+  if (kind === 'tree' && geom.type === 'Point' && free(...proj(geom.coordinates))) trees.push(proj(geom.coordinates));
+  else if (kind === 'tree_row' && geom.type === 'LineString' && inPark(geom.coordinates[0])) {
+    const p = geom.coordinates.map(proj);
+    for (let i = 1; i < p.length; i++) {
+      const n = Math.ceil(Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) / 8);
+      for (let k = 0; k < n; k++) trees.push([p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k / n, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k / n]);
+    }
+  } else if (geom.type === 'Polygon' && inPark(geom.coordinates[0][0])) {
+    if (kind === 'woodland') scatter(geom.coordinates[0], 1.2, trees);
+    if (kind === 'shrubland') scatter(geom.coordinates[0], 3, shrubs);
+  }
+}
+parkRings.forEach(r => { scatter(r, 0.12, trees); scatter(r, 0.15, shrubs); });
+dogRings.forEach(r => { scatter(r, 0.5, trees); scatter(r, 0.4, shrubs); }); // shaded dog runs
+
+function instanced(geo, material, list, size, yOf) {
+  const m = new THREE.InstancedMesh(geo, material, list.length), o = new THREE.Object3D();
+  list.forEach(([x, z], i) => {
+    const s = size * (0.7 + rand() * 0.6);
+    o.position.set(x, yOf(s), z);
+    o.scale.setScalar(s);
+    o.rotation.y = rand() * 6.28;
+    o.updateMatrix();
+    m.setMatrixAt(i, o.matrix);
+  });
+  m.castShadow = true;
+  m.userData.fullCount = list.length;   // Settings scales vegetation density via m.count
+  scene.add(m);
+}
+const leaf = new THREE.MeshLambertMaterial({ color: 0x3f7d3a, flatShading: true });
+instanced(new THREE.CylinderGeometry(0.12, 0.18, 1, 6), new THREE.MeshLambertMaterial({ color: 0x5b4330 }), trees, 5, s => s / 2);
+instanced(new THREE.IcosahedronGeometry(0.55, 0), leaf, trees, 7, s => s * 0.75);
+instanced(new THREE.IcosahedronGeometry(0.5, 0), new THREE.MeshLambertMaterial({ color: 0x5c9440, flatShading: true }), shrubs, 2.2, s => s * 0.3);
+const reeds = [];
+wetRings.forEach(r => scatter(r, 6, reeds));
+// Swamp field under the Benjakitti skywalks: OSM doesn't map it, so approximate it with marsh
+// patches and reeds within ~30 m of the skywalk decks (the design has the skywalks crossing the wetland).
+const marsh = [];
+for (const f of g.features) if (f.properties.kind === 'skywalk') {
+  const p = f.geometry.coordinates.map(proj);
+  for (let i = 1; i < p.length; i++) {
+    const n = Math.ceil(Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) / 8);
+    for (let k = 0; k < n; k++) for (let j = 0; j < 2; j++) {
+      const x = p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k / n + (rand() - 0.5) * 50;
+      const z = p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k / n + (rand() - 0.5) * 50;
+      const ll = unproj(x, z);
+      if (inPark(ll) && !inLake(ll) && !buildingRings.some(r => inside(ll, r))) marsh.push([x, z]);
+    }
+  }
+}
+{
+  const disc = new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2);
+  const m = new THREE.InstancedMesh(disc, marshMat, marsh.length), o = new THREE.Object3D();
+  marsh.forEach(([x, z], i) => {
+    o.position.set(x, 0.04 + i * 1e-5, z);
+    o.scale.setScalar(9 + rand() * 9);
+    o.rotation.set(0, rand() * 6.28, 0);
+    o.updateMatrix();
+    m.setMatrixAt(i, o.matrix);
+    for (let r = 0; r < 6; r++) reeds.push([x + (rand() - 0.5) * 16, z + (rand() - 0.5) * 16]);
+  });
+  m.receiveShadow = true;
+  scene.add(m);
+}
+instanced(new THREE.ConeGeometry(0.25, 1, 5), new THREE.MeshLambertMaterial({ color: 0x8a9a4a, flatShading: true }), reeds, 1.6, s => s / 2);
+counts.tree = trees.length;
+
+document.getElementById('info').innerHTML = `${counts.path} paths · ${counts.road || 0} roads · ${counts.building} buildings · ${counts.wall} walls · ${counts.landmark} landmarks · ${counts.toilet || 0} toilets · ${counts.wetland || 0} wetlands · ${counts.amphitheatre || 0} amphitheatres · ${counts.station || 0} stations · ${counts.markers || 0} distance markers · ${counts.bench || 0} benches · ${counts.stall || 0} stalls · ${counts.fitness || 0} fitness · ${counts.water || 0} water · ${trees.length} trees · ${shrubs.length} shrubs`
+  .split(' · ').map(t => { const [n, ...k] = t.split(' '); return `<dt>${k.join(' ')}</dt><dd>${Number(n).toLocaleString()}</dd>`; }).join('');
+
+// Landmarks from OSM (data/landmarks3d.geojson): statues, gates, fountains, bridges, pier, pavilions.
+const lm = await fetch('data/landmarks3d.geojson').then(r => r.ok ? r.json() : { features: [] });
+const LM = {
+  stone: lam(0xcfc8b8), bronze: new THREE.MeshStandardMaterial({ color: 0x7a5a2e, metalness: 0.7, roughness: 0.35 }),
+  white: lam(0xf2efe6), red: lam(0xa3242b), gold: new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.8, roughness: 0.3 }),
+  wood: lam(0x8b6a43), water: new THREE.MeshLambertMaterial({ color: 0x9fd3f0, transparent: true, opacity: 0.55 }),
+  glass: new THREE.MeshLambertMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.6 }), rail: lam(0x6f6f6f),
+};
+const elevatedIds = new Set(g.features.filter(f => ELEV[f.properties.kind]).map(f => f.properties.osm_id));
+const put = (geo, material, x, y, z, ry = 0) => {
+  const m = new THREE.Mesh(geo, material);
+  m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true;
+  scene.add(m);
+  return m;
+};
+function figure(x, z, base, k) {           // stylised standing statue on a plinth, scale k
+  put(box(3 * k, base, 3 * k), LM.stone, x, base / 2, z);
+  put(cyl(0.45 * k, 2.1 * k), LM.bronze, x, base + 1.05 * k, z);
+  put(new THREE.SphereGeometry(0.32 * k, 12, 10), LM.bronze, x, base + 2.4 * k, z);
+}
+let swanAt = null;
+for (const f of lm.features) {
+  const { type, name } = f.properties, geom = f.geometry;
+  const pt = geom.type === 'Point' ? geom.coordinates : geom.type === 'LineString' ? geom.coordinates[Math.floor(geom.coordinates.length / 2)] : geom.coordinates[0][0];
+  const [x, z] = geom.type === 'Polygon' ? centroid(geom.coordinates[0]) : proj(pt);
+  if (type === 'statue') {
+    const royal = /Rama VI|Ananda|King/i.test(name || '');
+    figure(x, z, royal ? 4 : 1.2, royal ? 2.2 : 1);
+    if (name) label(name, x, royal ? 18 : 8, z, 1, { icon: 'statue' });
+  } else if (type === 'sculpture') {
+    put(box(2.4, 1, 2.4), LM.stone, x, 0.5, z);
+    put(new THREE.TorusKnotGeometry(0.8, 0.22, 64, 8), LM.bronze, x, 2.3, z);
+    if (name) label(name, x, 7, z, 1, { icon: 'sculpture' });
+  } else if (type === 'memorial' || type === 'shrine') {
+    put(cyl(0.25, 1.6), LM.white, x, 0.8, z);                       // spirit-house post
+    put(box(1.4, 1, 1.4), LM.white, x, 2.1, z);
+    put(new THREE.ConeGeometry(1.2, 1.1, 4), LM.red, x, 3.15, z, Math.PI / 4);
+    put(new THREE.ConeGeometry(0.12, 0.8, 6), LM.gold, x, 4.0, z);
+    if (name) label(name, x, 7, z, 1, { icon: 'shrine' });
+  } else if (type === 'gate') {
+    const named = /gate|entrance/i.test(name || '');
+    if (!named) continue;                                          // unnamed barrier gates are just bollards/turnstiles
+    put(box(1.2, 4, 1.2), LM.stone, x - 3, 2, z); put(box(1.2, 4, 1.2), LM.stone, x + 3, 2, z);
+    put(box(7.6, 0.8, 1.4), LM.stone, x, 4.4, z);
+    label(name.toUpperCase(), x, 9, z, 0.8, { icon: 'gate' });
+  } else if (type === 'fountain') {
+    const r = geom.type === 'Polygon' ? Math.max(2, Math.sqrt(area(geom.coordinates[0]) / Math.PI)) : 3;
+    put(new THREE.CylinderGeometry(r, r + 0.2, 0.7, 24), LM.stone, x, 0.35, z);
+    put(new THREE.CylinderGeometry(r - 0.3, r - 0.3, 0.05, 24), LM.water, x, 0.72, z);
+    put(new THREE.ConeGeometry(0.5, 3.5, 12, 1, true), LM.water, x, 2.4, z);
+    if (name) label(name, x, 7, z, 1, { icon: 'fountain' });
+  } else if (type === 'bridge' && geom.type === 'Polygon') {
+    prism(geom.coordinates, 1.0, 1.2, [LM.stone, LM.stone]);
+    ribbon(geom.coordinates[0].map(proj), 0, 1.0, 'wall', 1.0, LM.rail);
+  } else if (type === 'footbridge' && geom.type === 'LineString' && !elevatedIds.has(f.properties.osm_id)) {
+    // Arched footbridge: deck rises 1.2 m mid-span, railings both sides.
+    const pts = geom.coordinates.map(proj), n = pts.length - 1;
+    const ys = pts.map((_, i) => 0.3 + 1.2 * Math.sin(Math.PI * (n ? i / n : 0.5)));
+    ribbon(pts, 3, ys, 'wall', 0, LM.wood);
+    for (const side of [-1.4, 1.4]) {
+      const off = pts.map((q, i) => {
+        const a = pts[Math.max(i - 1, 0)], b = pts[Math.min(i + 1, n)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        return [q[0] - (b[1] - a[1]) / l * side, q[1] + (b[0] - a[0]) / l * side];
+      });
+      ribbon(off, 0, ys, 'wall', 1.0, LM.rail);
+    }
+    if (name) label(name, x, 8, z);
+  } else if (type === 'pier') {
+    if (geom.type === 'Polygon') prism(geom.coordinates, 0.4, 1.2, [LM.wood, LM.wood]);
+    else ribbon(geom.coordinates.map(proj), 3, 0.4, 'wall', 0, LM.wood);
+    swanAt ??= [x, z];
+  } else if (type === 'boat') {
+    swanAt = [x, z];
+    label(name || 'Boat Rental', x, 7, z, 0.8, { icon: 'pin' });
+  } else if (type === 'bandstand' && geom.type === 'Polygon') {
+    const r = Math.sqrt(area(geom.coordinates[0]) / Math.PI);
+    put(new THREE.CylinderGeometry(r, r, 0.8, 8), LM.stone, x, 0.4, z);
+    for (let i = 0; i < 8; i++) put(cyl(0.2, 3.4), LM.white, x + Math.cos(i * Math.PI / 4) * (r - 0.6), 2.5, z + Math.sin(i * Math.PI / 4) * (r - 0.6));
+    put(new THREE.ConeGeometry(r + 1, 3, 8), LM.red, x, 5.7, z, Math.PI / 8);
+    if (name) label(name, x, 10, z);
+  } else if (type === 'tower') {                                   // Chinese Clock Tower: pagoda roof + clock faces
+    put(box(4.6, 13.6, 4.6), LM.white, x, 6.8, z);
+    put(new THREE.ConeGeometry(4.4, 3.2, 4), LM.red, x, 15.2, z, Math.PI / 4);
+    for (let i = 0; i < 4; i++) put(new THREE.CircleGeometry(1.1, 20), LM.gold, x + Math.sin(i * Math.PI / 2) * 2.32, 11, z + Math.cos(i * Math.PI / 2) * 2.32, i * Math.PI / 2);
+    label(name || 'Clock Tower', x, 21, z, 1, { icon: 'pin' });
+  } else if (type === 'sundial') {
+    put(new THREE.CylinderGeometry(3, 3, 0.4, 32), LM.stone, x, 0.2, z);
+    put(box(0.2, 2.2, 2.2).rotateX(Math.PI / 4), LM.bronze, x, 1, z);
+  } else if (type === 'elevator') {
+    put(box(3, 7, 3), LM.glass, x, 3.5, z);
+  } else if (type === 'viewpoint' && name) {
+    label(name, x, 8, z);
+  }
+}
+// Swan pedal boats on the water near the boat rental pier.
+if (swanAt) for (let i = 0; i < 10; i++) {
+  const a = rand() * 6.28, d = 12 + rand() * 45, sx = swanAt[0] + Math.cos(a) * d, sz = swanAt[1] + Math.sin(a) * d;
+  if (!inLake(unproj(sx, sz))) continue;
+  put(new THREE.SphereGeometry(1.1, 12, 8).scale(1.4, 0.7, 1), LM.white, sx, WATER_Y + 0.5, sz, a);
+  put(cyl(0.15, 1.4), LM.white, sx + Math.cos(a) * 1.1, WATER_Y + 1.4, sz - Math.sin(a) * 1.1);
+  put(new THREE.ConeGeometry(0.15, 0.4, 6).rotateZ(Math.PI / 2), LM.red, sx + Math.cos(a) * 1.4, WATER_Y + 2.05, sz - Math.sin(a) * 1.4, a);
+}
+
+// Lumpini directory (data/lumpini_directory.geojson, scraped from lumpinipark.com/map — places OSM lacks):
+// a beacon (ground ring + hairline post + label) for each, plus props where the place has physical form.
+const dir = await fetch('data/lumpini_directory.geojson').then(r => r.ok ? r.json() : { features: [] });
+const ringGeo = new THREE.RingGeometry(3.2, 3.8, 32).rotateX(-Math.PI / 2);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xc8102e, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
+const SKIP = /^Lumpini Park$|Station|Monument|Clock Tower|Dog Park|Green Bridge/;            // already modelled elsewhere
+for (const f of dir.features) {
+  const { name } = f.properties, c = f.geometry.coordinates;
+  if (SKIP.test(name) || !inside(c, cityRing)) continue;
+  const [x, z] = proj(c);
+  put(ringGeo, ringMat, x, 0.3, z);
+  put(box(0.15, 8, 0.15), LM.rail, x, 4, z);
+  label(name, x, 11, z, 0.6, { icon: 'pin' });
+  if (/Outdoor Gym/.test(name)) {
+    for (let i = 0; i < 6; i++) for (const [geo, material, px, py, pz] of MODELS.fitness) put(geo, material, x + (i % 3) * 4 - 4 + px, py, z + Math.floor(i / 3) * 4 - 2 + pz);
+  } else if (/Hawker/.test(name)) {
+    for (let i = 0; i < 10; i++) for (const [geo, material, px, py, pz] of MODELS.stall) put(geo, material, x + (i % 5) * 4 - 8 + px, py, z + Math.floor(i / 5) * 6 - 3 + pz);
+  } else if (/Swimming Pool/.test(name)) {
+    put(box(14, 0.6, 27), LM.stone, x, 0.3, z);
+    put(box(12, 0.1, 25), new THREE.MeshLambertMaterial({ color: 0x3fb4e0 }), x, 0.62, z);
+  } else if (/Basketball/.test(name)) {
+    put(box(15, 0.1, 28), lam(0xb5654a), x, 0.1, z);
+    put(box(0.2, 3.5, 0.2), LM.rail, x, 1.75, z - 13); put(box(0.2, 3.5, 0.2), LM.rail, x, 1.75, z + 13);
+  } else if (/Playground/.test(name)) {
+    put(box(10, 0.15, 10), lam(0xd9b98c), x, 0.1, z);
+    put(box(2, 2.5, 2), lam(0xe0702a), x - 2, 1.25, z); put(new THREE.ConeGeometry(1.6, 1.4, 4), lam(0x3a7bd5), x - 2, 3.2, z, Math.PI / 4);
+    put(box(0.8, 0.2, 4).rotateX(-0.5), lam(0xf5c242), x - 2, 1.2, z + 2.6);
+  }
+  counts.directory = (counts.directory || 0) + 1;
+}
+
+// Running-loop distance markers. OSM doesn't map the loops, so: shrink the park outline toward its
+// centroid until its length matches the published loop (Lumphini ~2.5 km — Wikipedia/guides; Benjakitti
+// running route 2.8 km — BMA Greener Bangkok), snap each sample to the nearest walkable path vertex, then
+// post a marker every 100 m and a labelled sign every 500 m. Positions are approximate.
+const RUN_LOOPS = [{ id: 23483299, name: 'LUMPHINI LOOP', len: 2500 }, { id: 1306732424, name: 'BENJAKITTI RUN', len: 2800 }];
+const groundPts = network.filter(e => e.kind === 'path').flatMap(e => e.pts);
+const postMat = lam(0xe4ebf1), postRed = lam(0xc8102e);
+for (const loop of RUN_LOOPS) {
+  const f = parks.find(p => p.properties.osm_id === loop.id);
+  if (!f) continue;
+  const ring = f.geometry.coordinates[0].map(proj);
+  const per = ring.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - ring[i][0], q[1] - ring[i][1]), 0);
+  const k = Math.min(1, loop.len / per), [cx, cz] = ring.reduce((a, q) => [a[0] + q[0] / ring.length, a[1] + q[1] / ring.length], [0, 0]);
+  const shrunk = ring.map(([x, z]) => [cx + (x - cx) * k, cz + (z - cz) * k]);
+  let acc = 0, next = 0, n100 = 0;
+  for (let i = 1; i < shrunk.length; i++) {
+    const [a, b] = [shrunk[i - 1], shrunk[i]], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    while (next <= acc + d) {
+      const t = (next - acc) / d, q = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      let best = q, bd = 25 ** 2;                                   // snap to a path within 25 m
+      for (const v of groundPts) { const dd = (v[0] - q[0]) ** 2 + (v[1] - q[1]) ** 2; if (dd < bd) { bd = dd; best = v; } }
+      const major = n100 % 5 === 0;
+      put(box(major ? 0.5 : 0.3, major ? 3 : 1.6, major ? 0.5 : 0.3), major ? postRed : postMat, best[0], major ? 1.5 : 0.8, best[1]);
+      if (major) label(n100 === 0 ? `${loop.name} · START` : `${loop.name} · ${(n100 / 10).toFixed(1)} KM`, best[0], 6, best[1], 0.55);
+      next += 100; n100++;
+    }
+    acc += d;
+  }
+  counts.markers = (counts.markers || 0) + n100;
+}
+// The HUD inventory was written before the markers existed; patch that row.
+document.querySelectorAll('#info dt').forEach(dt => { if (dt.textContent === 'distance markers') dt.nextElementSibling.textContent = counts.markers || 0; });
+
+// Satellite mode: drape Esri World Imagery (zoom 17, ~1.2 m/px) over ground, lawns, water and roofs.
+// Shape/extrude top caps use UVs = local metres (x, z-south), so one texture transform maps them all.
+const SAT_ZOOM = 17;
+async function buildSatellite() {
+  const [lonW, latN] = unproj(x0, z0), [lonE, latS] = unproj(x1, z1);
+  const tx = lon => (lon + 180) / 360 * 2 ** SAT_ZOOM;
+  const ty = lat => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** SAT_ZOOM; };
+  const [tx0, tx1, ty0, ty1] = [Math.floor(tx(lonW)), Math.floor(tx(lonE)), Math.floor(ty(latN)), Math.floor(ty(latS))];
+  const cv = document.createElement('canvas');
+  cv.width = (tx1 - tx0 + 1) * 256; cv.height = (ty1 - ty0 + 1) * 256;
+  const ctx = cv.getContext('2d'), jobs = [];
+  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push(new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { ctx.drawImage(img, (x - tx0) * 256, (y - ty0) * 256); res(); };
+    img.onerror = res;
+    img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${SAT_ZOOM}/${y}/${x}`;
+  }));
+  await Promise.all(jobs);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  // Mosaic edges in local metres (Web Mercator rows are near-linear in latitude over 2 km).
+  const lon = t => t / 2 ** SAT_ZOOM * 360 - 180;
+  const lat = t => Math.atan(Math.sinh(Math.PI * (1 - 2 * t / 2 ** SAT_ZOOM))) * 180 / Math.PI;
+  const [mx0, mz0] = proj([lon(tx0), lat(ty0)]), [mx1, mz1] = proj([lon(tx1 + 1), lat(ty1 + 1)]);
+  tex.repeat.set(1 / (mx1 - mx0), -1 / (mz1 - mz0));
+  tex.offset.set(-mx0 / (mx1 - mx0), mz1 / (mz1 - mz0));
+  return tex;
+}
+const SAT_COLORS = new Set([COLOR.park, COLOR.concrete, COLOR.water]);
+let satTex = null;
+const satSwaps = [];
+scene.traverse(o => {
+  if (!o.isMesh || o.isInstancedMesh) return;
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  const m = mats[0];
+  if (m && (m === roofMat || (!m.map && SAT_COLORS.has(m.color?.getHex()))) && !satSwaps.some(sw => sw.m === m)) satSwaps.push({ m, map: m.map, color: m.color.clone() });
+});
+// Stylised ground: classify each satellite pixel to the scene palette (lawn, canopy, paving, roof,
+// asphalt, water) after a light blur, so the real layout shows in the model's own flat style.
+const STYLE_PALETTE = [[124, 179, 107], [63, 125, 58], [201, 198, 191], [169, 166, 159], [74, 74, 79], [74, 144, 200], [143, 191, 106]];
+let styleTex = null;
+function buildStylised(src) {
+  const w = src.image.width >> 1, h = src.image.height >> 1, cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  ctx.filter = 'blur(1.5px)';
+  ctx.drawImage(src.image, 0, 0, w, h);
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const [r, g, b] = [d[i], d[i + 1], d[i + 2]], lum = (r + g + b) / 3;
+    // Rule-based: green-dominant → lawn/canopy by brightness; blue-dominant → water; else grey by brightness.
+    const best = g >= r && g >= b * 0.95 ? (lum > 92 ? 0 : 1)
+      : b > r + 8 && b > g ? 5
+      : lum > 165 ? 2 : lum > 105 ? 3 : 4;
+    [d[i], d[i + 1], d[i + 2]] = STYLE_PALETTE[best];
+  }
+  ctx.filter = 'none';
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = src.anisotropy;
+  t.repeat.copy(src.repeat); t.offset.copy(src.offset);
+  return t;
+}
+const GROUND_MODES = ['MAP', 'SATELLITE', 'STYLISED', 'PLAN'];
+let groundMode = 0;
+async function setGround(mode) {
+  if (mode > 0 && !satTex) satTex = await buildSatellite();
+  if (mode === 2 && !styleTex) styleTex = buildStylised(satTex);
+  const tex = [null, satTex, styleTex, null][mode];
+  await setPlan(mode === 3);
+  for (const sw of satSwaps) {
+    const isWater = sw.color.getHex() === COLOR.water;
+    const use = tex && !(mode === 2 && isWater);          // stylised keeps the scene's own water colour
+    sw.m.map = use ? tex : sw.map;
+    use ? sw.m.color.set(0xffffff) : sw.m.color.copy(sw.color);
+    sw.m.needsUpdate = true;
+  }
+  groundMode = mode;
+}
+// Add the hologram overlay layer to every UI panel (incl. the run panels injected later by runs.js).
+const addHoloFx = el => { if (!el.querySelector(':scope > .holoFx')) el.prepend(Object.assign(document.createElement('div'), { className: 'holoFx' })); };
+addHoloFx(document.getElementById('hud'));
+new MutationObserver(() => document.querySelectorAll('.rs-box').forEach(addHoloFx)).observe(document.body, { childList: true });
+{ const inv = document.getElementById('inv');
+  inv.open = prefs.get('inventory', innerWidth >= 600);              // phones default to folded; then remembered
+  inv.addEventListener('toggle', () => prefs.set('inventory', inv.open)); }
+// FILE readout (field overlay): source file info of the loaded run, published by js/runs.js.
+addEventListener('run:loaded', ({ detail: r }) => {
+  const f = r.track.file || {}, set = (k, v) => { const el = document.querySelector(`#fFile [data-f="${k}"]`); if (el) el.textContent = v; };
+  const hz = r.n > 1 ? (r.n - 1) / (r.dur || 1) : 0, km = r.dist[r.n - 1] / 1000;
+  set('name', (f.name || r.track.name || 'DEMO').toUpperCase().slice(0, 28));
+  set('fmt', [f.format || 'GPX', f.creator && f.creator.toUpperCase().slice(0, 16), f.bytes && `${Math.round(f.bytes / 1024)} KB`].filter(Boolean).join(' · '));
+  set('pts', `${r.n.toLocaleString()} PTS · ${hz >= 0.95 ? '1 HZ' : (1 / hz).toFixed(1) + ' S'}`);
+  set('when', r.track.start ? r.track.start.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).toUpperCase() : 'NO TIMESTAMP');
+  set('dist', `${km.toFixed(2)} KM · ${new Date(r.dur * 1000).toISOString().slice(11, 19)}`);
+  set('match', `▷ MATCH ${Math.round(100 * r.matched / r.n)}% · DECK ${r.deck}${r.track.dropped ? ' · DROP ' + r.track.dropped : ''}`);
+});
+// HUD minimise toggle (remembered per browser).
+{
+  const hud = document.getElementById('hud'), btn = document.getElementById('hudMin');
+  const setMin = on => {
+    hud.classList.toggle('min', on);
+    btn.textContent = on ? '+' : '–';
+    btn.title = on ? 'Expand panel' : 'Minimise panel';
+    btn.setAttribute('aria-expanded', !on);
+    try { localStorage.setItem('hudMin', on ? '1' : '0'); } catch {}
+  };
+  let saved = null; try { saved = localStorage.getItem('hudMin'); } catch {}
+  setMin(saved === null ? innerWidth <= 600 : saved === '1');   // phones start minimised; then remembered
+  btn.addEventListener('click', () => setMin(!hud.classList.contains('min')));
+}
+const satBtn = document.getElementById('sat');
+satBtn?.addEventListener('click', async () => {
+  satBtn.disabled = true;
+  await setGround((groundMode + 1) % GROUND_MODES.length);
+  satBtn.disabled = false;
+  syncGroundBtn();
+  prefs.set('ground', groundMode);
+});
+function syncGroundBtn() {
+  satBtn.textContent = `GROUND: ${GROUND_MODES[groundMode]}`;
+  satBtn.classList.toggle('on', groundMode > 0);
+  satBtn.setAttribute('aria-pressed', groundMode > 0);
+}
+
+// Holographic map mode: swap materials to a dark hologram look (navy ground, translucent blue towers with
+// cyan edges, red road veins, cyan bridges); hide vegetation & props. Originals are restored on toggle-off.
+let holo = null, holoOn = false;
+function buildHolo() {
+  const H = (color, opacity, additive = true) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: !additive,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide });
+  const M = {
+    ground: new THREE.MeshBasicMaterial({ color: 0x07111b }), park: new THREE.MeshBasicMaterial({ color: 0x0b1d2b }),
+    side: new THREE.MeshBasicMaterial({ color: 0x050a10 }), water: new THREE.MeshBasicMaterial({ color: 0x0d3557 }),
+    building: H(0x5aa9dc, 0.08), road: H(0xe4ebf1, 0.45), path: H(0xe4ebf1, 0.3), bridge: H(0x7fd4ff, 0.95), wall: H(0x5aa9dc, 0.12),
+  };
+  const swaps = [], hidden = [], edgeGeos = [], outlineGeos = [], roadOutlineGeos = [], bridgeOutlineGeos = [];
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    const hc = o.userData.hc;
+    if (!hc) { if (o.isInstancedMesh) hidden.push(o); return; }          // vegetation / furniture instances
+    if (hc === 'prop') { hidden.push(o); return; }                       // statues, posts, kiosks…
+    if (hc === 'building') edgeGeos.push(new THREE.EdgesGeometry(o.geometry, 25));
+    if (hc === 'road' || hc === 'path') (hc === 'road' ? roadOutlineGeos : outlineGeos).push(new THREE.EdgesGeometry(o.geometry, 1));   // ribbon borders only
+    if (hc === 'bridge') bridgeOutlineGeos.push(new THREE.EdgesGeometry(o.geometry, 1));
+    swaps.push([o, o.material, M[hc]]);
+  });
+  const edges = new THREE.LineSegments(mergeGeometries(edgeGeos),
+    new THREE.LineBasicMaterial({ color: 0x7fd4ff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }));
+  // Slight orange outline on roads & paths, lifted 5 cm so it sits on the ribbon edges.
+  const roadOutlineGeo = mergeGeometries(roadOutlineGeos);
+  const outline = new THREE.LineSegments(mergeGeometries([...outlineGeos, roadOutlineGeo]),
+    new THREE.LineBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  outline.position.y = 0.05;
+  edges.visible = outline.visible = false;
+  scene.add(edges, outline);
+  return { swaps, hidden, edges, outline, pathOutlineGeo: mergeGeometries(outlineGeos), roadOutlineGeo, bridgeOutlineGeo: mergeGeometries(bridgeOutlineGeos) };
+}
+function setHolo(on) {
+  holo ??= buildHolo();
+  for (const [o, orig, m] of holo.swaps) o.material = on ? m : orig;
+  for (const o of holo.hidden) o.visible = !on;
+  holo.edges.visible = holo.outline.visible = on;
+
+  scene.fog.color.set(on ? 0x000000 : 0x000000);
+  holoOn = on;
+  if (planMesh) planMesh.material.color.set(on ? 0x7fd4ff : 0x1d2a33);
+}
+// SOLID view: dark steel-blue metal + blue building wireframe + crimson roads/bridges (Spider-Man-suit scheme).
+let solid = null;
+function buildSolid() {
+  // Low metalness: there's no environment map, so high-metal surfaces would render near-black.
+  // DoubleSide: polygons are built facing down (ShapeGeometry rotated +90°), originals render both sides too.
+  const S = (color, metalness, roughness, emissive = 0x060c14) => new THREE.MeshStandardMaterial({ color, metalness, roughness, emissive, emissiveIntensity: 1, side: THREE.DoubleSide });
+  const M = {
+    building: S(0x2c4560, 0.75, 0.22), park: S(0x16222e, 0.1, 0.6), ground: Object.assign(S(0x121a23, 0.2, 0.5), { envMapIntensity: 0.12 }), side: S(0x070b10, 0.1, 1),
+    // Water: not a perfect mirror — a dark env reflects as pure black and flickers as the view/sun moves.
+    water: Object.assign(S(0x1d3a58, 0.35, 0.3, 0x0a1a2c), { envMapIntensity: 0.6 }), road: S(0x161b22, 0.4, 0.35), path: S(0x2f5d80, 0.5, 0.3), bridge: S(0x2c4560, 0.6, 0.3),
+    wall: S(0x2e4760, 0.6, 0.3), prop: S(0x3a5674, 0.8, 0.2),
+  };
+  // Suit-style surface (reference: navy with a fine diagonal wire mesh + blue sheen). UVs are metres, so
+  // one 128 px tile = 4 m; the same tile drives a faint emissive so the mesh reads even in shadow.
+  const meshTile = draw => canvasTexture(128, 128, draw, 1 / 4, 1 / 4);
+  const hatch = (c, w, h, a) => {
+    c.strokeStyle = `rgba(110,170,215,${a})`; c.lineWidth = 1.6;
+    for (let i = -w; i < w * 2; i += 32) {
+      c.beginPath(); c.moveTo(i, 0); c.lineTo(i + h, h); c.stroke();
+      c.beginPath(); c.moveTo(i, h); c.lineTo(i + h, 0); c.stroke();
+    }
+  };
+  const suitMap = meshTile((c, w, h) => { const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#1b2a3a'); g.addColorStop(1, '#141f2b'); c.fillStyle = g; c.fillRect(0, 0, w, h); hatch(c, w, h, 0.6); });
+  const suitGlow = meshTile((c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); hatch(c, w, h, 0.9); });
+  // Metalness 0.4 (not 0.7): highly metallic faces turned away from a low sun got almost no diffuse light and
+  // rendered as black slabs that "popped" as the sun/camera moved; this keeps an ambient floor plus sheen.
+  const suit = (color, rough) => new THREE.MeshStandardMaterial({ color, map: suitMap, emissive: 0x3a7bb0, emissiveMap: suitGlow, emissiveIntensity: 0.7,
+    metalness: 0.4, roughness: rough, side: THREE.DoubleSide, envMapIntensity: 1.1 });
+  M.building = suit(0xc6d6e6, 0.28); M.wall = suit(0xb0c4d6, 0.35); M.prop = suit(0xc6d6e6, 0.25);
+  // Generated ground textures (UVs are metres): tech grid every 10 m with panel seams for open ground,
+  // faint dot field for lawns, so no area reads as a blank slab.
+  const groundTex = canvasTexture(256, 256, (c, w, h) => {
+    noise(c, w, h, '#121a23', 0.18, 2500);
+    c.strokeStyle = 'rgba(90,169,220,0.16)'; c.lineWidth = 2;
+    for (let i = 0; i <= 4; i++) { c.beginPath(); c.moveTo(i * 64, 0); c.lineTo(i * 64, h); c.moveTo(0, i * 64); c.lineTo(w, i * 64); c.stroke(); }
+    c.strokeStyle = 'rgba(90,169,220,0.06)'; c.lineWidth = 1;
+    for (let i = 0; i < 16; i++) { c.beginPath(); c.moveTo(i * 16, 0); c.lineTo(i * 16, h); c.moveTo(0, i * 16); c.lineTo(w, i * 16); c.stroke(); }
+  }, 1 / 40, 1 / 40);
+  const lawnTex = canvasTexture(128, 128, (c, w, h) => {
+    noise(c, w, h, '#1b232c', 0.2, 1500);
+    c.fillStyle = 'rgba(160,180,200,0.12)';
+    for (let y = 4; y < h; y += 16) for (let x = (y / 16 % 2) * 8 + 4; x < w; x += 16) c.fillRect(x, y, 2, 2);
+  }, 1 / 12, 1 / 12);
+  M.ground = new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.35, metalness: 0.4, emissive: 0x060c14, side: THREE.DoubleSide, envMapIntensity: 0.35 });
+  M.park = new THREE.MeshStandardMaterial({ map: lawnTex, roughness: 0.4, metalness: 0.35, emissive: 0x060c14, side: THREE.DoubleSide, envMapIntensity: 0.3 });
+  // Land-use / wetland / pitch polygons keep a darkened, blue-shifted version of their own colour.
+  const tinted = new Map(), NAVY = new THREE.Color(0x16222e);
+  const tint = c => {
+    const k = c.getHex();
+    // SOLID palette: no beige / yellow / green.
+    if (!tinted.has(k)) {
+      const hsl = c.getHSL({}), red = hsl.s >= 0.25 && (hsl.h < 0.07 || hsl.h > 0.93);
+      // Dark greys only (slightly lighter for lighter source colours); tracks/courts keep a dim crimson.
+      const g = 0.075 + hsl.l * 0.06, col = red ? new THREE.Color(0x4a1220) : new THREE.Color(g, g * 1.05, g * 1.12);
+      tinted.set(k, new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(7), map: groundTex, roughness: 0.35, metalness: 0.4,
+        envMapIntensity: 0.35, emissive: 0x060c14, side: THREE.DoubleSide })); }
+    return tinted.get(k);
+  };
+  const inst = S(0x2c4a63, 0.3, 0.45), swaps = [];
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    if (o.isInstancedMesh) { swaps.push([o, o.material, inst]); return; }
+    const hc = o.userData.hc;
+    const m0 = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (hc === 'park' && o.geometry.type !== 'ExtrudeGeometry' && m0.color && m0.color.getHex() !== COLOR.park && !m0.map) swaps.push([o, o.material, tint(m0.color)]);
+    else if (hc === 'park' && m0.map && m0 !== soil[0]) swaps.push([o, o.material, M.ground]);   // e.g. car parks
+    else if (hc && M[hc]) swaps.push([o, o.material, M[hc]]);
+  });
+  holo ??= buildHolo();                                                    // reuse the building edge geometry
+  const edges = new THREE.LineSegments(holo.edges.geometry,
+    new THREE.LineBasicMaterial({ color: 0x5aa9dc, transparent: true, opacity: 0.32, depthWrite: false }));
+  // White outline along road & path edges (same border geometry as the holo orange outline).
+  // Road & path borders white; bridges get a dim orange outline.
+  const outline = new THREE.Group();
+  const white = new THREE.LineBasicMaterial({ color: 0xe4ebf1, transparent: true, opacity: 0.5, depthWrite: false });
+  outline.add(new THREE.LineSegments(holo.pathOutlineGeo, white), new THREE.LineSegments(holo.roadOutlineGeo, white),
+    new THREE.LineSegments(holo.bridgeOutlineGeo, new THREE.LineBasicMaterial({ color: 0xd9822b, transparent: true, opacity: 0.55, depthWrite: false })));
+  outline.position.y = 0.06;
+  edges.visible = outline.visible = false; scene.add(edges, outline);
+  return { swaps, edges, outline };
+}
+// Reflections for SOLID: a neutral studio environment, so metal/gloss reads as sheen instead of black.
+let envTex = null;
+function setSolid(on) {
+  solid ??= buildSolid();
+  envTex ??= new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = on ? envTex : null;
+  scene.environmentIntensity = 0.55;
+  for (const [o, orig, m] of solid.swaps) o.material = on ? m : orig;
+  solid.edges.visible = solid.outline.visible = on;
+}
+const VIEWS = ['REAL', 'HOLO', 'SOLID'];
+let viewMode = 0;
+const holoBtn = document.getElementById('holo');
+function applyView(mode) {
+  viewMode = mode;
+  if (holoOn) setHolo(false);                                              // back to originals first
+  if (solid) setSolid(false);
+  if (viewMode === 1) setHolo(true);
+  if (viewMode === 2) setSolid(true);
+  holoBtn.textContent = `VIEW: ${VIEWS[viewMode]}`;
+  window.twin.view = VIEWS[viewMode];
+  prefs.set('view', VIEWS[viewMode]);
+  for (const fn of window.twin.onView || []) fn(VIEWS[viewMode]);
+  holoBtn.classList.toggle('on', viewMode > 0);
+  holoBtn.setAttribute('aria-pressed', viewMode > 0);
+}
+holoBtn?.addEventListener('click', () => applyView((viewMode + 1) % VIEWS.length));
+
+// Sun path: NOAA solar position for Bangkok (13.73 N, 100.55 E, UTC+7). Drives the sun light + shadows,
+// draws today's arc across the sky with hour ticks, and follows run replays via twin.setSun(date).
+const LAT = 13.73 * Math.PI / 180, LON = 100.55, TZ = 7, SKY_R = 1700;
+function solar(date) {
+  const doy = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 864e5);
+  const hrs = date.getUTCHours() + TZ + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const g = 2 * Math.PI / 365 * (doy - 1 + (hrs - 12) / 24);
+  const eqt = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const tst = hrs * 60 + eqt + 4 * LON - 60 * TZ, ha = (tst / 4 - 180) * Math.PI / 180;
+  const cosZ = Math.sin(LAT) * Math.sin(decl) + Math.cos(LAT) * Math.cos(decl) * Math.cos(ha);
+  const alt = Math.PI / 2 - Math.acos(Math.min(1, Math.max(-1, cosZ)));
+  // atan2 form: robust at every hour (the acos form flips hemispheres near sunrise/sunset).
+  const az = (Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(LAT) - Math.tan(decl) * Math.cos(LAT)) + Math.PI) % (2 * Math.PI);   // from north, clockwise
+  return { alt, az };
+}
+// x east, z south, y up.
+const sunDir = ({ alt, az }) => new THREE.Vector3(Math.sin(az) * Math.cos(alt), Math.sin(alt), -Math.cos(az) * Math.cos(alt));
+const SKY_C = new THREE.Vector3((x0 + x1) / 2, 0, (z0 + z1) / 2);
+const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(28, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffd27a, fog: false }));
+const sunHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+  const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,220,150,0.9)'); gr.addColorStop(1, 'rgba(255,170,60,0)');
+  c.fillStyle = gr; c.fillRect(0, 0, w, h);
+}), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+sunHalo.scale.setScalar(260);
+scene.add(sunDisc, sunHalo);
+let sunArc = null, sunArcDay = '';
+function drawArc(date) {
+  const day = date.toDateString();
+  if (day === sunArcDay) return;
+  sunArcDay = day;
+  if (sunArc) { scene.remove(sunArc); sunArc.traverse(o => o.geometry?.dispose()); }
+  sunArc = new THREE.Group();
+  const pts = [], d0 = new Date(date); d0.setHours(5, 0, 0, 0);
+  for (let m = 0; m <= 15 * 60; m += 5) {
+    const p = solar(new Date(d0.getTime() + m * 6e4));
+    if (p.alt > -0.02) pts.push(sunDir(p).multiplyScalar(SKY_R).add(SKY_C));
+  }
+  sunArc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineDashedMaterial({ color: 0xffc46b, dashSize: 30, gapSize: 18, transparent: true, opacity: 0.7, fog: false })));
+  sunArc.children[0].computeLineDistances();
+  for (let hr = 6; hr <= 18; hr++) {                                       // hour ticks
+    const t = new Date(d0); t.setHours(hr, 0, 0, 0);
+    const p = solar(t);
+    if (p.alt < 0) continue;
+    const v = sunDir(p).multiplyScalar(SKY_R).add(SKY_C);
+    const tick = new THREE.Mesh(new THREE.SphereGeometry(7, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffc46b, fog: false }));
+    tick.position.copy(v); sunArc.add(tick);
+    if (hr % 3 === 0) { const sp = label(`${String(hr).padStart(2, '0')}:00 · ${day.slice(4, 10).toUpperCase()}`, v.x, v.y + 40, v.z, 1.4); if (sp) { scene.remove(sp); sunArc.add(sp); } }
+  }
+  scene.add(sunArc);
+}
+function setSun(date) {
+  drawArc(date);
+  const p = solar(date), dir = sunDir(p), up = Math.max(0, Math.sin(p.alt));
+  sunDisc.position.copy(dir).multiplyScalar(SKY_R).add(SKY_C);
+  sunHalo.position.copy(sunDisc.position);
+  sunDisc.visible = sunHalo.visible = p.alt > -0.05;
+  sun.position.copy(dir).multiplyScalar(1500).add(SKY_C);
+  sun.target.position.copy(SKY_C); sun.target.updateMatrixWorld();
+  sun.intensity = 2.2 * Math.min(1, up * 2.5);
+  sun.color.setHSL(0.09, 0.8 * (1 - up), 0.5 + 0.5 * up);               // warm near the horizon
+  hemi.intensity = 0.25 + 1.0 * Math.min(1, up * 2);
+  renderer.shadowMap.needsUpdate = true;
+  const sr = document.getElementById('sunR');
+  if (sr && document.activeElement !== sr) {
+    const bkk = new Date(date.getTime() + 7 * 3600e3);                       // Bangkok wall-clock minutes
+    sr.value = Math.min(+sr.max, Math.max(+sr.min, bkk.getUTCHours() * 60 + bkk.getUTCMinutes()));
+  }
+  const el = document.getElementById('sunT');
+  if (el) el.textContent = `${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })} · ALT ${(p.alt * 180 / Math.PI).toFixed(0)}° · AZ ${(p.az * 180 / Math.PI).toFixed(0)}°`;
+}
+scene.add(sun.target);
+const sunRange = document.getElementById('sunR');
+const sunDate = new Date();
+// Slider minutes are Bangkok wall-clock time (UTC+7), independent of the viewer's own time zone.
+const fromSlider = () => { const d = new Date(sunDate.getTime() + 7 * 3600e3); d.setUTCHours(0, +sunRange.value, 0, 0); return new Date(d.getTime() - 7 * 3600e3); };
+sunRange?.addEventListener('input', () => setSun(fromSlider()));
+if (sunRange) { const n = new Date(Date.now() + 7 * 3600e3); sunRange.value = Math.min(1110, Math.max(330, n.getUTCHours() * 60 + n.getUTCMinutes())); setSun(fromSlider()); }
+
+// Official Benjakitti Forest Park master plan (Turenscape + Arsomsilp, via ArchDaily) draped as linework.
+// Georeferenced by a 2-point similarity: plan px (928,327) = lake centre (945.6, 82.4) m;
+// plan px (1320,680) = museum centroid (652.6, 350.1) m  →  0.752 m/px, rotated 95.6°.
+const PLAN = { img: 'data/benjakitti_masterplan.jpg', w: 2000, h: 1413, a: [928, 327], A: [945.6, 82.4], b: [1320, 680], B: [652.6, 350.1] };
+let planMesh = null;
+async function buildPlan() {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = PLAN.img; });
+  const cv = document.createElement('canvas'); cv.width = PLAN.w; cv.height = PLAN.h;
+  const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
+  const id = ctx.getImageData(0, 0, PLAN.w, PLAN.h), d = id.data;
+  for (let i = 0; i < d.length; i += 4) {                              // ink → opaque, paper → transparent
+    const ink = 255 - (d[i] + d[i + 1] + d[i + 2]) / 3;
+    d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.min(255, ink * 2.2);
+  }
+  ctx.putImageData(id, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const [dpx, dpy] = [PLAN.b[0] - PLAN.a[0], PLAN.b[1] - PLAN.a[1]], [dwx, dwz] = [PLAN.B[0] - PLAN.A[0], PLAN.B[1] - PLAN.A[1]];
+  const sc = Math.hypot(dwx, dwz) / Math.hypot(dpx, dpy), th = Math.atan2(dwz, dwx) - Math.atan2(dpy, dpx);
+  const toW = (px, py) => {
+    const u = px - PLAN.a[0], v = py - PLAN.a[1];
+    return [PLAN.A[0] + sc * (u * Math.cos(th) - v * Math.sin(th)), PLAN.A[1] + sc * (u * Math.sin(th) + v * Math.cos(th))];
+  };
+  const c = [toW(0, 0), toW(PLAN.w, 0), toW(PLAN.w, PLAN.h), toW(0, PLAN.h)], y = 0.22;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(c.flatMap(([x, z]) => [x, y, z]), 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  planMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, color: 0x1d2a33 }));
+  planMesh.renderOrder = 2;
+  scene.add(planMesh);
+}
+async function setPlan(on) {
+  if (on && !planMesh) await buildPlan();
+  if (planMesh) { planMesh.visible = on; planMesh.material.color.set(holoOn ? 0x7fd4ff : 0x1d2a33); }
+}
+
+boot(0.88, 'OPTIMISING GEOMETRY');
+// ---------- Performance: static batching ----------
+// ~6k individual meshes → one merged mesh per (material, holo class, shadow flags). Each mesh is classified
+// first (userData.hc) so holo mode can still swap materials per merged batch.
+const ROAD_MATS = new Set([roadMat, onewayMat, serviceMat, flyoverMat]);
+function holoClass(o, mat, part) {
+  const t = o.geometry.type, c = mat.color?.getHex();
+  if (t === 'ExtrudeGeometry') return o.position.y > 1.5 ? 'building' : part === 1 ? 'side' : c === COLOR.park ? 'park' : 'ground';
+  if (t === 'ShapeGeometry') return c === COLOR.water ? 'water' : 'park';
+  if (ROAD_MATS.has(mat)) return 'road';
+  if (c === COLOR.green_mile || c === COLOR.skywalk || c === COLOR.flyover) return 'bridge';
+  if (c === COLOR.path) return 'path';
+  if (t === 'BufferGeometry') return 'wall';
+  return 'prop';
+}
+function sliceGeo(g, start, count) {                       // non-indexed sub-range → standalone geometry
+  const out = new THREE.BufferGeometry();
+  for (const k of ['position', 'normal', 'uv']) {
+    const a = g.attributes[k];
+    out.setAttribute(k, new THREE.BufferAttribute(a.array.slice(start * a.itemSize, (start + count) * a.itemSize), a.itemSize));
+  }
+  return out;
+}
+{
+  scene.updateMatrixWorld(true);
+  const NO_BATCH = new Set([voidGround, sunDisc]);
+  const buckets = new Map(), drop = [];
+  for (const o of [...scene.children]) {
+    if (!o.isMesh || o.isInstancedMesh || NO_BATCH.has(o)) continue;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    if (mats.some(m => m.blending === THREE.AdditiveBlending || m.transparent && m.opacity < 1 && m.depthWrite === false)) continue;
+    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    if (!g.attributes.normal) g.computeVertexNormals();
+    if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    g.applyMatrix4(o.matrixWorld);
+    const parts = Array.isArray(o.material) && g.groups.length
+      ? g.groups.map(gr => [sliceGeo(g, gr.start, Math.min(gr.count, g.attributes.position.count - gr.start)), mats[gr.materialIndex ?? 0], gr.materialIndex ?? 0])
+      : [[sliceGeo(g, 0, g.attributes.position.count), mats[0], 0]];
+    for (const [pg, m, part] of parts) {
+      if (!m || !pg.attributes.position.count) continue;
+      // Textured materials are shared objects; plain ones are re-created per call by mat(), so key those by look.
+      const look = m.map ? m.uuid : `${m.type}|${m.color?.getHex()}|${m.side}|${m.transparent}|${m.opacity}|${m.vertexColors}|${m.flatShading}`;
+      const hc = holoClass(o, m, part), key = `${look}|${hc}|${o.castShadow}|${o.receiveShadow}`;
+      if (!buckets.has(key)) buckets.set(key, { m, hc, cast: o.castShadow, recv: o.receiveShadow, order: o.renderOrder, geos: [] });
+      buckets.get(key).geos.push(pg);
+    }
+    drop.push(o);
+  }
+  for (const o of drop) scene.remove(o);
+  for (const b of buckets.values()) {
+    const merged = mergeGeometries(b.geos), nrm = merged.attributes.normal;
+    for (let i = 0; i < nrm.count; i++) {                         // zero-length / NaN normals → straight up
+      const x = nrm.getX(i), y = nrm.getY(i), z = nrm.getZ(i);
+      if (!(x * x + y * y + z * z > 1e-8)) nrm.setXYZ(i, 0, 1, 0);
+    }
+    const mesh = new THREE.Mesh(merged, b.m);
+    mesh.castShadow = b.cast; mesh.receiveShadow = b.recv; mesh.renderOrder = b.order;
+    mesh.userData.hc = b.hc;
+    mesh.matrixAutoUpdate = false;
+    scene.add(mesh);
+  }
+  console.info(`batched ${drop.length} meshes into ${buckets.size}`);
+}
+// Shadows only re-render when the sun moves (setSun) instead of every frame.
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
+
+// Public handle for add-on modules (js/runs.js: Strava/GPX run replay).
+const onFrame = [];
+window.twin = { prefs, THREE, scene, camera, controls, renderer, proj, unproj, inside, inPark, parkRings, cityRing, network, ELEV, label, onFrame, setSun, view: 'REAL', onView: [],
+  };
+window.twin.setView = name => applyView(Math.max(0, VIEWS.indexOf(name)));
+let savedView = prefs.get('view', null); try { savedView ??= localStorage.getItem('mapView'); } catch {}
+applyView(Math.max(0, VIEWS.indexOf(savedView || 'SOLID')));   // default SOLID; onboarding can change + remember it
+// ---------- Park selection: frame BOTH / LUMPHINI / BENJAKITTI (more parks later) ----------
+const PARKS = { LUMPHINI: [23483299], BENJAKITTI: [864170465, 1306732424] };
+function parkView(name) {
+  if (name === 'BOTH' || !PARKS[name]) return { pos: defaultCamPos(), target: VIEW_TARGET.clone() };
+  const pts = parks.filter(f => PARKS[name].includes(f.properties.osm_id)).flatMap(f => f.geometry.coordinates[0].map(proj));
+  const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]);
+  const c = new THREE.Vector3((Math.min(...xs) + Math.max(...xs)) / 2, 0, (Math.min(...zs) + Math.max(...zs)) / 2);
+  const span = Math.max(Math.max(...xs) - Math.min(...xs), (Math.max(...zs) - Math.min(...zs)) * (innerWidth / innerHeight));
+  const d = span * 0.95 * Math.max(1, 1.2 / (innerWidth / innerHeight));
+  return { pos: c.clone().add(new THREE.Vector3(0, d * 0.75, d * 0.72)), target: c };
+}
+let currentPark = prefs.get('park', 'BOTH'), parkFly = null;
+function selectPark(name, fly = true) {
+  currentPark = PARKS[name] ? name : 'BOTH';
+  prefs.set('park', currentPark);
+  document.querySelectorAll('#hud .pk[data-park]').forEach(b => { const on = b.dataset.park === currentPark; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  const v = parkView(currentPark);
+  if (fly) parkFly = { t: 0, p0: camera.position.clone(), t0: controls.target.clone(), p1: v.pos, t1: v.target };
+  else { camera.position.copy(v.pos); controls.target.copy(v.target); }
+}
+// The "home" view (start, and the glide back after FOLLOW) is the selected park.
+Object.defineProperty(window.twin, 'defaultView', { get: () => parkView(currentPark), configurable: true });
+document.querySelectorAll('#hud .pk[data-park]').forEach(b => b.addEventListener('click', () => selectPark(b.dataset.park)));
+onFrame.push(() => {                                    // smoothstep camera flight between park framings
+  if (!parkFly) return;
+  parkFly.t = Math.min(1, parkFly.t + 1 / 70);
+  const u = parkFly.t * parkFly.t * (3 - 2 * parkFly.t);
+  camera.position.lerpVectors(parkFly.p0, parkFly.p1, u);
+  controls.target.lerpVectors(parkFly.t0, parkFly.t1, u);
+  if (parkFly.t >= 1) parkFly = null;
+});
+controls.addEventListener('start', () => { parkFly = null; });
+selectPark(currentPark, false);
+boot(1, 'SYSTEM ONLINE');
+// Restore remembered ground mode (satellite tiles load in the background).
+{ const g0 = prefs.get('ground', 0); if (g0 > 0 && g0 < GROUND_MODES.length) setGround(g0).then(syncGroundBtn); }
+
+// ---------- Hologram post-processing (subtle "Stark" look) ----------
+// Half-res bloom for glowing emissives, then one pass: radial chroma split, scanlines, faint flicker,
+// cool shadow lift and vignette. Strengths are deliberately low so the map stays readable.
+let fpsN = 0, fpsT = 0;
+const fFps = document.getElementById('fFps'), fSun = document.getElementById('fSun');
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+// Sanitise before bloom: a single NaN/Inf pixel (e.g. from a zero-length normal on a degenerate edge) gets
+// blurred by the bloom mip chain into flat black screen-space blocks that pop in and out.
+const sanitize = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 px; varying vec2 vUv;
+    bool bad(vec4 c){ return any(isnan(c)) || any(isinf(c)); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      if (bad(c)) {                                  // fill from valid neighbours (a black fill showed as a "blip" in sun sheen)
+        vec4 s = vec4(0.0); float n = 0.0;
+        for (int i = 0; i < 4; i++) {
+          vec2 o = i == 0 ? vec2(px.x, 0.0) : i == 1 ? vec2(-px.x, 0.0) : i == 2 ? vec2(0.0, px.y) : vec2(0.0, -px.y);
+          vec4 q = texture2D(tDiffuse, vUv + o * 2.0);
+          if (!bad(q)) { s += q; n += 1.0; }
+        }
+        c = n > 0.0 ? s / n : vec4(0.0, 0.0, 0.0, 1.0);
+      }
+      gl_FragColor = vec4(clamp(c.rgb, 0.0, 8.0), c.a);
+    }`,
+});
+composer.addPass(sanitize);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.15, 0.4, 0.9);
+bloom.enabled = !MOBILE;   // costliest pass on phones; Settings can toggle it
+composer.addPass(bloom);
+const hologram = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, res: { value: new THREE.Vector2(innerWidth, innerHeight) } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float time; uniform vec2 res; varying vec2 vUv;
+    void main(){
+      vec2 d = vUv - 0.5; float r = length(d);
+      vec2 off = d * 0.0035 * r;                                   // chroma split grows toward the edges
+      vec3 col = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+      float scan = 0.965 + 0.035 * sin(vUv.y * res.y * 1.6 + time * 4.0);   // fine moving scanlines
+      float flick = 0.992 + 0.008 * sin(time * 47.0) * sin(time * 13.0);   // barely-there flicker
+      col *= scan * flick;
+      col += vec3(0.0, 0.0012, 0.0028) * (1.0 - col);                      // cool lift in the shadows (linear; sRGB output amplifies it)
+      col *= smoothstep(0.95, 0.35, r);                                     // vignette
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+});
+composer.addPass(hologram);
+Object.assign(window.twin, { composer, passes: { bloom, hologram, sanitize }, sun, hemi, MOBILE, allLabels });
+composer.addPass(new OutputPass());
+
+// Demo runner along the longest Green Mile segment until real GPS runs are loaded.
+const runner = new THREE.Mesh(new THREE.SphereGeometry(3, 16, 12), new THREE.MeshLambertMaterial({ color: 0xff2255, emissive: 0x440011 }));
+runner.castShadow = true;
+scene.add(runner);
+const curve = new THREE.CatmullRomCurve3(longest.map(([x, z]) => new THREE.Vector3(x, ELEV.green_mile + 3, z)));
+const trailLen = 200, trail = new Float32Array(trailLen * 3);
+const trailGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(trail, 3));
+for (let i = 0; i < trailLen; i++) trail.set([longest[0][0], ELEV.green_mile + 3, longest[0][1]], i * 3);
+const demoTrail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xff2255 }));
+scene.add(demoTrail);
+window.twin.demo = { runner, trail: demoTrail }; // runs.js hides these once a real run loads
+
+const clock = new THREE.Clock();
+function frame() {
+  const len = curve.getLength(), speed = 3.3 * 20; // ~5:00/km, 20x time
+  const s = (clock.getElapsedTime() * speed) % (2 * len);
+  const p = curve.getPointAt((s < len ? s : 2 * len - s) / len);
+  runner.position.copy(p);
+  trail.copyWithin(3, 0, (trailLen - 1) * 3);
+  trail.set([p.x, p.y, p.z], 0);
+  trailGeo.attributes.position.needsUpdate = true;
+  for (const fn of onFrame) fn(clock.elapsedTime);
+  controls.update();
+  // Fade labels the camera gets close to: a sprite a few metres away fills the screen as a dark square
+  // for a frame while orbiting past it. Fully hidden < 25 m, normal beyond 80 m.
+  // Each label = plate sprite (REAL) + glyph twin with leader/ring (HOLO, SOLID). Whoever owns the label
+  // (e.g. the run replay) toggles plate.visible; the current view only picks which style is drawn.
+  const glyph = window.twin?.view && window.twin.view !== 'REAL';
+  for (const l of allLabels) {
+    const d = l.position.distanceTo(camera.position);
+    // Settings: labels off, or beyond the quality preset's label distance → hidden.
+    const off = window.twin.labelsOn === false || d > (window.twin.labelFar ?? Infinity);
+    const a = off || d < 25 ? 0 : Math.min(1, (d - 25) / 55);
+    l.material.opacity = glyph && l.userData.twin ? 0 : a;
+    const L = l.userData.twin;
+    if (L) {
+      L.sp.visible = L.leader.visible = L.ring.visible = glyph && l.visible && !off;
+      L.sp.material.opacity = a;
+    }
+  }
+  hologram.uniforms.time.value = clock.elapsedTime;
+  fpsN++; if (clock.elapsedTime - fpsT > 1) { fFps.textContent = fpsN; fpsN = 0; fpsT = clock.elapsedTime; fSun.textContent = (document.getElementById('sunT')?.textContent || '').split(' · ').slice(1, 2).join('') || '--'; }
+  composer.render();
+}
+renderer.setAnimationLoop(frame);
+// Export hooks: pause the live loop and render single frames on demand (deterministic video export).
+Object.assign(window.twin, { frame, pauseLoop: () => renderer.setAnimationLoop(null), resumeLoop: () => renderer.setAnimationLoop(frame), clock });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  hologram.uniforms.res.value.set(innerWidth, innerHeight);
+  sanitize.uniforms.px.value.set(1 / innerWidth, 1 / innerHeight);
+});
+</script>
+<script type="module">
+// Run replay add-on: loads after the scene has published window.twin.
+const wait = () => window.twin
+  ? (import('./js/runs.js').then(() => import('./js/strava.js')).catch(e => console.warn('runs.js / strava.js failed', e)), import('./js/onboard.js').catch(e => console.warn('onboard.js failed', e)), import('./js/settings.js').catch(e => console.warn('settings.js failed', e)), import('./js/export.js').catch(e => console.warn('export.js failed', e)))
+  : setTimeout(wait, 200);
+wait();
+</script></body></html>

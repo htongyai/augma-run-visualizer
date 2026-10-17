@@ -1,0 +1,22 @@
+:root{
+  /* color */
+  --void:#000000; --bg:#030405; --panel:#10141a; --panel2:#151a21; --panel-lit:#2a2f36;
+  --grid:rgba(160,180,200,.05); --line:rgba(200,214,226,.22); --line-faint:rgba(200,214,226,.08); --hair:rgba(200,214,226,.5);
+  --txt:#9aa6b2; --hi:#e4ebf1; --dim:#4c5866; --mute:#7b8692; --mute-d:#3a414a;
+  --red:#c8102e; --red-ghost:rgba(200,16,46,.35); --blue:#5aa9dc; --deep:#2b5d82; --glow:#080a0d;
+  /* type */
+  --font-display:'Rajdhani',sans-serif; --font-data:'Share Tech Mono',monospace;
+  --fs-micro:7px; --fs-cap:8px; --fs-body:10px; --fs-label:11px; --fs-glyph:13px;
+  --fs-title:18px; --fs-num:20px; --fs-display-s:40px; --fs-display:56px;
+  --track-body:.14em; --track-wide:.2em; --track-xwide:.3em;
+  /* space */
+  --sp-1:4px; --sp-2:8px; --sp-3:14px; --sp-4:24px; --sp-5:28px; --sp-6:48px; --sp-7:56px;
+  /* stroke */
+  --stroke:1px; --stroke-em:2px;
+  /* motion */
+  --dur-fast:.2s; --dur-slow:.8s;
+  /* layers */
+  --z-stage:0; --z-hud:1; --z-overlay:10;
+  /* grid */
+  --grid-size:72px;
+}
